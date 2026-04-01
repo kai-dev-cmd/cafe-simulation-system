@@ -4,42 +4,48 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Your Shop</title>
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&display=swap"
-    />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="app-shell">
-      <div class="left-column">
-        <div id="mainPanel" class="panel">
-          <div class="panel-header">CAFEMINAL // MAIN SYSTEM</div>
-          <div class="panel-body">
-            <div id="mainBody"></div>
-
-            <div id="infoPanel" class="terminal-block hidden">
-              <div class="inline-info-header">
-                <span>INFO STREAM</span>
-                <button data-action="close-info">CLOSE</button>
-              </div>
-              <div id="infoBody"></div>
-            </div>
-          </div>
-        </div>
+    
+    <!-- CUSTOMER PANEL -->
+    <div id="customerPanel" class="panel">
+      <div class="panel-header">
+        <span class="window-controls" aria-hidden="true">
+          <span class="window-dot"></span>
+          <span class="window-dot"></span>
+          <span class="window-dot"></span>
+        </span>
+        <span class="window-title">Customers</span>
       </div>
+      <div id="customerBody" class="panel-body"></div>
+    </div>
 
-      <div class="right-column">
-        <div id="customerPanel" class="panel">
-          <div class="panel-header">CUSTOMER QUEUE</div>
-          <div id="customerBody" class="panel-body"></div>
-        </div>
-
-        <div id="logPanel" class="panel">
-          <div class="panel-header">SYSTEM LOG</div>
-          <div id="logBody" class="panel-body"></div>
-        </div>
+    <!-- MAIN APP PANEL -->
+    <div id="mainPanel" class="panel">
+      <div class="panel-header">
+        <span class="window-controls" aria-hidden="true">
+          <span class="window-dot"></span>
+          <span class="window-dot"></span>
+          <span class="window-dot"></span>
+        </span>
+        <span class="window-title">Your Shop</span>
       </div>
+      <div id="mainBody" class="panel-body"></div>
+    </div>
+
+    <!-- INFO PANEL (TOGGLEABLE) -->
+    <div id="infoPanel" class="panel hidden">
+      <div class="panel-header panel-header-split">
+        <span class="window-controls" aria-hidden="true">
+          <span class="window-dot"></span>
+          <span class="window-dot"></span>
+          <span class="window-dot"></span>
+        </span>
+        <span class="window-title">Info</span>
+        <button data-action="close-info">X</button>
+      </div>
+      <div id="infoBody" class="panel-body"></div>
     </div>
 
     <script src="script.js"></script>

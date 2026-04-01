@@ -1,6 +1,29 @@
-// ======================
-// STATE (manages game data)
-// ======================
+// =========================================================
+// 📍 QUICK NAVIGATION MAP
+// Jump instantly using Cmd + F (search keywords below)
+//
+// 🧠 [STATE] → Game data (cash, items, products, UI)
+// ⚖️ [CONSTANTS] → Prices, limits, timings
+// 🔗 [DOM] → HTML element hooks
+// ⚙️ [RUNTIME] → Temporary UI states (popups, timers)
+//
+// 💬 [POPUP] → All popup systems (feedback, alerts)
+// 🧩 [LOGIC] → Core logic (stock, button states, calculations)
+// ⚙️ [PRODUCTION] → Queue → production → stock
+//
+// 🖥️ [RENDER] → UI generation (inventory, recipes, panels)
+// 🧍 [CUSTOMER] → Spawn, serve, behavior, tips
+//
+// 🎮 [EVENT] → User actions (click handling)
+// 🪟 [UI] → Dragging panels, UI interactions
+//
+// 🚀 [INIT] → Game start + loops
+// =========================================================
+
+// =========================================================
+// 🧠 GAME STATE
+// All dynamic data lives here (money, stock, customers, UI)
+// =========================================================
 const state = {
   // starting cash
   cash: 100,
@@ -33,8 +56,6 @@ const state = {
   customer: {
     list: [],
   },
-
-  logs: [],
 
   ui: {
     activeTab: "inventory",
@@ -79,39 +100,28 @@ const CUSTOMERS = [
   },
 ];
 
-// ======================
-// DOM REFERENCES (UI hooks)
-// ======================
+// =========================================================
+// 🔗 DOM REFERENCES
+// Connect JS → HTML elements
+// If UI breaks, check here first
+// =========================================================
 const mainBodyEl = document.getElementById("mainBody");
 const infoBodyEl = document.getElementById("infoBody");
 const mainPanelEl = document.getElementById("mainPanel");
 const infoPanelEl = document.getElementById("infoPanel");
 const customerBodyEl = document.getElementById("customerBody");
 const customerPanelEl = document.getElementById("customerPanel");
-const logBodyEl = document.getElementById("logBody");
 
-// ======================
-// SYSTEM VARIABLES (runtime)
-// ======================
+// =========================================================
+// ⚙️ RUNTIME VARIABLES
+// Temporary UI/system states (popups, timers, flags)
+// Not part of core game data
+// =========================================================
 let quickInfoPopupEl = null;
 let quickInfoCloseTimeoutId = null;
 let purchaseBlockedPopupEl = null;
 let purchaseBlockedTimeoutId = null;
 let customerPopupActive = false;
-
-function addLog(text) {
-  const stamp = new Date().toLocaleTimeString("en-US", {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-
-  state.logs.unshift(`[${stamp}] ${text}`);
-  if (state.logs.length > 20) {
-    state.logs = state.logs.slice(0, 20);
-  }
-}
 
 // popup state
 function removeQuickInfoPopup() {
@@ -125,9 +135,10 @@ function removeQuickInfoPopup() {
   }
 }
 
-// ======================
-// POPUP SYSTEM (UI feedback)
-// ======================
+// =========================================================
+// 💬 POPUP SYSTEM (Feedback Engine)
+// Handles all temporary UI feedback (info, errors, success)
+// =========================================================
 
 // remove quick info popup
 function showQuickInfoPopup(product = "coffee") {
@@ -137,9 +148,7 @@ function showQuickInfoPopup(product = "coffee") {
     product === "matchaLatte" ? "Milk + Matcha" : "Milk + Coffee Beans";
 
   quickInfoPopupEl = document.createElement("div");
-  quickInfoPopupEl.style =
-    "position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;color:#111;padding:12px;border-radius:8px;z-index:9999;";
-  quickInfoPopupEl.className = "quick-info-popup";
+  quickInfoPopupEl.className = "game-popup quick-info-popup";
   quickInfoPopupEl.innerHTML = `<div>Ingredients:</div><div>${ingredients}</div><div class="popup-bar-container"><div class="popup-bar"></div></div>`;
 
   document.body.appendChild(quickInfoPopupEl);
@@ -173,8 +182,7 @@ function showpurchaseBlockedPopup(product = "coffee") {
     product === "matchaLatte" ? "(need milk + matcha)" : "(need milk + beans)";
 
   purchaseBlockedPopupEl = document.createElement("div");
-  purchaseBlockedPopupEl.style =
-    "position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#ef4444;color:#fff;padding:10px 12px;border-radius:6px;z-index:9999;";
+  purchaseBlockedPopupEl.className = "game-popup blocked-popup";
   purchaseBlockedPopupEl.innerHTML = `<div>Not enough money to purchase</div><div>${needText}</div><div class="popup-bar-container"><div class="popup-bar"></div></div>`;
 
   document.body.appendChild(purchaseBlockedPopupEl);
@@ -208,8 +216,7 @@ function showPurchasedPopup() {
   removePurchasedPopup();
 
   purchasedPopupEl = document.createElement("div");
-  purchasedPopupEl.style =
-    "position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#22c55e;color:#fff;padding:10px 12px;border-radius:6px;z-index:9999;";
+  purchasedPopupEl.className = "game-popup purchased-popup";
 
   purchasedPopupEl.innerHTML = `
     <div>Purchased!</div>
@@ -234,8 +241,7 @@ function showCustomerPopup() {
   customerPopupActive = true;
 
   const el = document.createElement("div");
-  el.style =
-    "position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#111;color:#fff;padding:16px;border-radius:8px;z-index:9999;";
+  el.className = "game-popup customer-popup";
   el.innerText = "New Customer Request";
 
   document.body.appendChild(el);
@@ -249,8 +255,7 @@ function showCustomerPopup() {
 // serve popup
 function showServePopup(amount) {
   const el = document.createElement("div");
-  el.style =
-    "position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);background:#22c55e;color:#fff;padding:10px 14px;border-radius:6px;z-index:9999;font-weight:bold;";
+  el.className = "game-popup serve-popup";
   el.innerText = `+ $${amount}`;
 
   document.body.appendChild(el);
@@ -263,8 +268,7 @@ function showProductionLimitPopup() {
   removepurchaseBlockedPopup();
 
   purchaseBlockedPopupEl = document.createElement("div");
-  purchaseBlockedPopupEl.style =
-    "position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#f59e0b;color:#111;padding:10px 12px;border-radius:6px;z-index:9999;";
+  purchaseBlockedPopupEl.className = "game-popup limit-popup";
 
   purchaseBlockedPopupEl.innerHTML = `
     <div>You can only make 2 batches in production</div>
@@ -282,9 +286,11 @@ function showProductionLimitPopup() {
   purchaseBlockedTimeoutId = setTimeout(removepurchaseBlockedPopup, 3000);
 }
 
-// ======================
-// HELPER LOGIC
-// ======================
+// =========================================================
+// 🧩 HELPER LOGIC
+// Pure logic (no UI)
+// Determines outcomes, states, calculations
+// =========================================================
 
 // determines make button state based on ingredients and cash
 function getMakeButtonState(product) {
@@ -323,7 +329,11 @@ function updateCustomerProgressBar() {
 
     bar.style.width = `${progress * 100}%`;
     bar.style.background =
-      progress > 0.6 ? "#22c55e" : progress > 0.3 ? "#eab308" : "#ef4444";
+      progress > 0.6
+        ? "var(--progress-good)"
+        : progress > 0.3
+          ? "var(--progress-warn)"
+          : "var(--progress-bad)";
   });
 }
 
@@ -356,15 +366,9 @@ function processProductionQueue() {
 
     product.productionQueue = product.productionQueue.filter((batch) => {
       if (now >= batch.endTime) {
-        let produced = 0;
         for (let i = 0; i < batch.qty * SERVINGS_PER_BATCH; i++) {
           if (product.stock.length >= MAX_STOCK) break;
           product.stock.push({ createdAt: Date.now() });
-          produced++;
-        }
-
-        if (produced > 0) {
-          addLog(`PRODUCTION COMPLETE: ${key} +${produced} servings`);
         }
         return false; // remove batch
       }
@@ -373,9 +377,11 @@ function processProductionQueue() {
   });
 }
 
-// ======================
-// RENDER SYSTEM (UI generation)
-// ======================
+// =========================================================
+// 🖥️ RENDER SYSTEM (UI Builder)
+// Converts state → HTML
+// If UI looks wrong, problem is here
+// =========================================================
 
 // inventory table
 function renderInventoryContent() {
@@ -477,10 +483,10 @@ function renderRecipesContent() {
       <button data-action="recipe-dec" data-product="coffee">-</button>
       <span>${coffeeQty}</span>
       <button data-action="recipe-inc" data-product="coffee">+</button>
-      ${coffeeTotalCost > 0 ? `<span style="opacity:0.8;">-$${coffeeTotalCost}</span>` : ""}
+      ${coffeeTotalCost > 0 ? `<span class="qty-cost">-$${coffeeTotalCost}</span>` : ""}
     </div>
 
-    <div style="display:flex; gap:6px;">
+    <div class="row-actions">
       ${(() => {
         const stateBtn = getMakeButtonState("coffee");
         return `
@@ -556,10 +562,10 @@ function renderRecipesContent() {
       <button data-action="recipe-dec" data-product="matchaLatte">-</button>
       <span>${matchaLatteQty}</span>
       <button data-action="recipe-inc" data-product="matchaLatte">+</button>
-      ${matchaTotalCost > 0 ? `<span style="opacity:0.8;">-$${matchaTotalCost}</span>` : ""}
+      ${matchaTotalCost > 0 ? `<span class="qty-cost">-$${matchaTotalCost}</span>` : ""}
     </div>
 
-    <div style="display:flex; gap:6px;">
+    <div class="row-actions">
       ${(() => {
         const stateBtn = getMakeButtonState("matchaLatte");
         return `
@@ -633,9 +639,9 @@ function renderCustomerPanel() {
 
   if (!customers.length) {
     return `
-      <div class="customer-panel" style="opacity:0.7;">
+      <div class="customer-panel customer-panel-empty">
         <div>No customers at the moment...</div>
-        <div style="font-size:12px;opacity:0.6;">Waiting for next order</div>
+        <div class="customer-subtext">Waiting for next order</div>
       </div>
     `;
   }
@@ -647,6 +653,8 @@ function renderCustomerPanel() {
 
       const elapsed = Date.now() - customer.startTime;
       const progress = Math.max(0, 1 - elapsed / customer.duration);
+      const progressColor =
+        progress > 0.6 ? "var(--progress-good)" : progress > 0.3 ? "var(--progress-warn)" : "var(--progress-bad)";
 
       return `
       <div class="customer-panel">
@@ -665,12 +673,12 @@ function renderCustomerPanel() {
         ${
           customer.phase === "ordering"
             ? `
-        <div style="margin-top:8px;">
+        <div class="customer-actions">
           <button 
             data-action="serve-customer"
             data-product="${customer.order}"
             data-id="${customer.startTime}"
-            style="background:${hasStock ? "#22c55e" : "#ef4444"}"
+            class="serve-btn ${hasStock ? "is-ready" : "is-empty"}"
             ${hasStock ? "" : "disabled"}
           >
             Serve
@@ -682,19 +690,9 @@ function renderCustomerPanel() {
          ${
            customer.phase === "ordering"
              ? `
-        <div style="margin-top:8px;">
-          <div style="height:6px;background:rgba(0,255,136,0.15);">
-            <div data-progress-id="${customer.startTime}" style="
-              height:100%;
-              width:${progress * 100}%;
-              background:${
-                progress > 0.6
-                  ? "#22c55e" // green
-                  : progress > 0.3
-                    ? "#eab308" // yellow
-                    : "#ef4444" // red
-              };
-            "></div>
+        <div class="customer-progress-wrap">
+          <div class="customer-progress-track">
+            <div data-progress-id="${customer.startTime}" class="customer-progress-fill" style="width:${progress * 100}%; background:${progressColor};"></div>
           </div>
         </div>`
              : ""
@@ -717,11 +715,6 @@ function render() {
     state.ui.activeTab === "recipes" ? "tab active" : "tab";
 
   mainBodyEl.innerHTML = `
-    <div class="header">
-      <div class="logo">CAFEMINAL</div>
-      <div class="subtitle">// MAIN SYSTEM</div>
-    </div>
-    
     <div class="top-bar">
       <button data-action="view-cash">Cash: $${state.cash}</button>
 
@@ -766,29 +759,27 @@ function render() {
     const profit = totalRevenue - totalExpenses;
 
     infoContent = `
-    <div class="report-title">[ SYSTEM REPORT ]</div>
-    <div class="summary-line"><strong>PROFIT SUMMARY</strong></div>
+    <div class="summary-line"><strong>💰 Profit Summary</strong></div>
 
-    <div class="summary-line">Coffee served: ${coffeeServed} -> $${coffeeRevenue}</div>
-    <div class="summary-line">Matcha served: ${matchaServed} -> $${matchaRevenue}</div>
+    <div class="summary-line">Coffee: ${coffeeServed} served → $${coffeeRevenue}</div>
+    <div class="summary-line">Matcha Latte: ${matchaServed} served → $${matchaRevenue}</div>
 
-    <div class="summary-line" style="margin-top:10px;">Revenue: $${totalRevenue}</div>
+    <div class="summary-line summary-gap">Revenue: $${totalRevenue}</div>
     <div class="summary-line">Expenses: $${totalExpenses}</div>
-    <div class="summary-line"><strong>Profit: $${profit}</strong></div>
+    <div class="summary-line"><strong>Net Profit: $${profit}</strong></div>
   `;
   }
 
   if (view === "servings") {
     infoContent = `
-    <div class="report-title">[ SYSTEM REPORT ]</div>
-    <div class="summary-line"><strong>COFFEE</strong></div>
+    <div class="summary-line"><strong>☕ Coffee</strong></div>
     <div class="summary-line">Stock: ${state.products.coffee.stock.length}</div>
     <div class="summary-line">Production Time: 8s</div>
     <div class="summary-line">Ingredients: Milk + Beans</div>
     <div class="summary-line">Sell Price: $${SERVE_PRICE}</div>
     <div class="summary-line">Batch Output: ${SERVINGS_PER_BATCH}</div>
 
-    <div class="summary-line" style="margin-top:12px;"><strong>MATCHA LATTE</strong></div>
+    <div class="summary-line summary-gap-lg"><strong>🍵 Matcha Latte</strong></div>
     <div class="summary-line">Stock: ${state.products.matchaLatte.stock.length}</div>
     <div class="summary-line">Production Time: 15s</div>
     <div class="summary-line">Ingredients: Milk + Matcha</div>
@@ -801,31 +792,22 @@ function render() {
     const totalExpenses = state.expenses.ingredients + state.expenses.waste;
 
     infoContent = `
-    <div class="report-title">[ SYSTEM REPORT ]</div>
-    <div class="summary-line"><strong>COST BREAKDOWN</strong></div>
+    <div class="summary-line"><strong>💸 Cost Breakdown</strong></div>
 
     <div class="summary-line">Ingredients Cost: $${state.expenses.ingredients}</div>
     <div class="summary-line">Waste Cost: $${state.expenses.waste}</div>
 
-    <div class="summary-line" style="margin-top:10px;"><strong>Total Expenses: $${totalExpenses}</strong></div>
+    <div class="summary-line summary-gap"><strong>Total Expenses: $${totalExpenses}</strong></div>
   `;
   }
 
   infoBodyEl.innerHTML = infoContent;
-
-  if (logBodyEl) {
-    const lines = state.logs
-      .map((line) => `<div class="log-entry">${line}</div>`)
-      .join("");
-
-    logBodyEl.innerHTML = `
-      <div class="log-list">
-        ${lines || `<div class="log-empty">[No log entries yet]</div>`}
-      </div>
-      <div class="log-cursor">&gt; _</div>
-    `;
-  }
 }
+
+// =========================================================
+// 🧍 CUSTOMER SYSTEM
+// Spawning, behavior, patience, serving logic
+// =========================================================
 
 // serve product to customer
 function serveProduct(productType, id) {
@@ -859,7 +841,6 @@ function serveProduct(productType, id) {
   // update cash and show popup
   state.cash += finalAmount;
   showServePopup(finalAmount);
-  addLog(`SERVED: ${customer.name} (${productType}) +$${finalAmount}`);
 
   // track served
   state.products[productType].totalServed =
@@ -891,7 +872,6 @@ function spawnCustomer() {
   };
 
   state.customer.list.push(newCustomer);
-  addLog(`CUSTOMER ARRIVED: ${newCustomer.name} wants ${newCustomer.label}`);
 
   // expiration logic
   setTimeout(() => {
@@ -943,9 +923,11 @@ function acceptCustomer() {
   render();
 }
 
-// ======================
-// EVENT SYSTEM (user actions)
-// ======================
+// =========================================================
+// 🎮 EVENT SYSTEM (User Input)
+// Handles clicks and user actions
+// Main control flow entry from UI
+// =========================================================
 function handleMainClick(event) {
   const target = event.target.closest("[data-action]");
   if (!target) return;
@@ -1029,9 +1011,6 @@ function handleMainClick(event) {
 
     state.expenses.waste += wasteCost;
     state.cash -= wasteCost;
-    addLog(
-      `WASTE: removed ${spoiled.length} spoiled ${product} (-$${wasteCost})`,
-    );
 
     render();
     return;
@@ -1077,7 +1056,6 @@ function handleMainClick(event) {
       state.cash -= total;
       state.expenses.ingredients += total;
       state.ui.purchaseQty[item] = 0;
-      addLog(`PURCHASE: ${item} x${qty} (-$${total})`);
       showPurchasedPopup();
       render();
     }
@@ -1095,9 +1073,7 @@ function handleMainClick(event) {
     const requiredSecond = product === "matchaLatte" ? nextQty : nextQty;
 
     // check production queue limit
-    if (
-      state.products[product].productionQueue.length >= MAX_PRODUCTION_QUEUE
-    ) {
+    if (state.products[product].productionQueue.length >= MAX_PRODUCTION_QUEUE) {
       showProductionLimitPopup();
       return;
     }
@@ -1222,8 +1198,6 @@ function handleMainClick(event) {
           : COFFEE_PRODUCTION_TIME_MS),
     });
 
-    addLog(`PRODUCTION START: ${product} batch x${qty}`);
-
     render();
   }
 }
@@ -1234,9 +1208,10 @@ function handleInfoClick(event) {
   }
 }
 
-// ======================
-// DRAGGABLE PANELS (UI interaction)
-// ======================
+// =========================================================
+// 🪟 UI INTERACTION SYSTEM
+// Dragging, panel movement, UI behavior
+// =========================================================
 function makePanelDraggable(panelEl) {
   const header = panelEl.querySelector(".panel-header");
   let dragging = false,
@@ -1258,15 +1233,19 @@ function makePanelDraggable(panelEl) {
   document.addEventListener("mouseup", () => (dragging = false));
 }
 
-// ======================
-// INIT (entry point)
-// ======================
+// =========================================================
+// 🚀 INIT & GAME LOOP
+// Entry point + continuous systems
+// Starts everything
+// =========================================================
 function init() {
   mainBodyEl.addEventListener("click", handleMainClick);
   customerBodyEl.addEventListener("click", handleMainClick);
   infoPanelEl.addEventListener("click", handleInfoClick);
 
-  // CAFEMINAL uses fixed split layout; draggable panels are disabled.
+  makePanelDraggable(mainPanelEl);
+  makePanelDraggable(infoPanelEl);
+  makePanelDraggable(customerPanelEl);
 
   render();
 
