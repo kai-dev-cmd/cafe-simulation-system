@@ -1,0 +1,537 @@
+/* ======================
+   BASE / GLOBAL
+====================== */
+:root {
+  --bg: #000;
+  --fg: #00ff88;
+  --dim: #00b86b;
+  --line: rgba(0, 255, 136, 0.45);
+  --yellow: #eab308;
+  --red: #ef4444;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--fg);
+  font-family:
+    "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12px;
+  padding: 12px;
+}
+
+.left-column,
+.right-column {
+  min-height: 0;
+}
+
+.right-column {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 12px;
+}
+
+/* ======================
+   PANEL LAYOUT
+====================== */
+.panel {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  background: transparent;
+  min-height: 0;
+}
+
+.panel-header {
+  padding: 10px 12px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--line);
+  user-select: none;
+  letter-spacing: 0.04em;
+}
+
+.panel-body {
+  padding: 12px;
+  overflow: auto;
+}
+
+#mainPanel {
+  min-height: calc(100vh - 24px);
+}
+
+.hidden {
+  display: none;
+}
+
+.terminal-block {
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  padding: 10px;
+}
+
+.inline-info-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px dashed var(--line);
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+}
+
+/* ======================
+   TOP BAR / NAVIGATION
+====================== */
+.top-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tab.active {
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+/* ======================
+   TABLE / GRID LAYOUT
+====================== */
+.table-head,
+.row {
+  display: grid;
+  gap: 14px;
+  align-items: center;
+}
+
+.table-head.inventory,
+.row.inventory {
+  grid-template-columns: 1fr 140px 120px 100px 160px;
+}
+
+.table-head.recipes,
+.row.recipes {
+  grid-template-columns:
+    2.5fr /* Product */
+    2.5fr /* Serve */
+    120px /* Qty (small) */
+    120px /* Actions */
+    120px /* Production */
+    1.4fr; /* Stock */
+}
+
+.table-head {
+  font-weight: 700;
+  margin-bottom: 8px;
+  text-align: left;
+  color: var(--dim);
+}
+
+.table-head div:first-child {
+  text-align: left;
+  padding-left: 4px;
+}
+
+.table-head > div:not(:last-child) {
+  padding-right: 8px;
+  border-right: 1px solid var(--line);
+}
+
+.row {
+  padding: 10px 12px;
+  border: 1px solid rgba(0, 255, 136, 0.14);
+  margin-bottom: 6px;
+}
+
+.row > div {
+  min-width: 0;
+}
+
+.row > div:not(:last-child) {
+  border-right: 1px solid rgba(0, 255, 136, 0.2);
+  padding-right: 8px;
+}
+
+.row.recipes > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ======================
+   STOCK STATES
+====================== */
+.stock-zero {
+  border-color: rgba(239, 68, 68, 0.6);
+}
+
+.stock-low {
+  border-color: rgba(234, 179, 8, 0.6);
+}
+
+.status.zero {
+  color: var(--red);
+}
+
+.status.low {
+  color: var(--yellow);
+}
+
+.stock-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stock-text {
+  font-size: 12px;
+  text-align: center;
+}
+
+/* ======================
+   STOCK BARS / BLOCKS
+====================== */
+
+.stock-bar-container {
+  width: 100%;
+  height: 6px;
+  background: rgba(0, 255, 136, 0.15);
+  overflow: hidden;
+}
+
+.stock-bar {
+  height: 100%;
+  background: var(--fg);
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+.stock-block {
+  width: 8px;
+  height: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.45);
+}
+
+.stock-blocks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  align-items: center;
+}
+
+.stock-block.fresh {
+  background: var(--fg);
+}
+.stock-block.warning {
+  background: var(--yellow);
+}
+.stock-block.spoiled {
+  background: var(--red);
+}
+
+/* ======================
+   SMALL UI ELEMENTS
+====================== */
+.qty {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.summary-line {
+  margin-bottom: 6px;
+}
+
+.text-center {
+  text-align: center;
+}
+
+/* ======================
+   POPUPS / PROGRESS BAR
+====================== */
+.popup-bar-container {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.3);
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.popup-bar {
+  height: 100%;
+  width: 100%;
+  background: white;
+  transition: width linear;
+}
+
+.quick-info-popup .popup-bar {
+  background: black;
+}
+
+.quick-info-popup .popup-bar-container {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.prod-bar {
+  width: 100%;
+  height: 18px;
+  background: rgba(0, 255, 136, 0.14);
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.prod-fill {
+  height: 100%;
+  background: var(--fg);
+  color: #000;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: width 0.3s linear;
+}
+
+/* ======================
+   BUTTONS / COLORS
+====================== */
+button {
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--line);
+  padding: 4px 8px;
+  font-family: inherit;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+button:not(.info-btn)::before {
+  content: "> ";
+}
+
+button:hover:not(:disabled) {
+  background: var(--fg);
+  color: #000;
+  opacity: 1;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.profit-value {
+  color: var(--fg);
+  font-weight: bold;
+}
+
+.btn-green {
+  border-color: var(--fg);
+}
+
+.btn-red {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+.btn-yellow {
+  border-color: var(--yellow);
+  color: var(--yellow);
+}
+
+.btn-waste {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.btn-waste:hover {
+  background: var(--red);
+  color: #000;
+}
+
+.btn-green {
+  border-color: var(--fg);
+  color: var(--fg);
+}
+.btn-yellow {
+  border-color: var(--yellow);
+  color: var(--yellow);
+}
+.btn-red {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+/* ======================
+   INFO BUTTON
+====================== */
+
+.info-btn {
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--dim);
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.info-btn:hover {
+  color: #000;
+}
+
+/* ======================
+   ANIMATIONS
+====================== */
+
+.header {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.logo {
+  text-shadow: 0 0 8px rgba(0, 255, 136, 0.6);
+}
+
+.logo {
+  font-size: 40px;
+  letter-spacing: 6px;
+  font-weight: 700;
+
+  background: linear-gradient(
+    90deg,
+    #00ffff,
+    #00ff88,
+    #ffff00,
+    #ff8800,
+    #ff0088
+  );
+
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.subtitle {
+  font-size: 12px;
+  color: var(--dim);
+  margin-top: 4px;
+}
+
+.shake {
+  animation: shake 0.3s;
+}
+
+@keyframes shake {
+  0% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-4px);
+  }
+  50% {
+    transform: translateX(4px);
+  }
+  75% {
+    transform: translateX(-4px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.sell-progress {
+  height: 4px;
+  width: 100%;
+  background: rgba(239, 68, 68, 0.15);
+  overflow: hidden;
+  margin-top: 4px;
+  position: relative;
+}
+
+.sell-progress::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--red);
+  transform-origin: left;
+  transform: scaleX(1);
+}
+
+.sell-progress.active::after {
+  animation: sellCountdown 2s linear infinite;
+}
+
+@keyframes sellCountdown {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.customer-panel {
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid var(--line);
+}
+
+.log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 100%;
+}
+
+.log-entry {
+  color: var(--dim);
+  border-bottom: 1px dotted rgba(0, 255, 136, 0.2);
+  padding-bottom: 4px;
+  font-size: 12px;
+}
+
+.log-empty {
+  opacity: 0.7;
+}
+
+.log-cursor {
+  margin-top: 8px;
+  color: var(--fg);
+  animation: blink 1s step-start infinite;
+}
+
+.report-title {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
