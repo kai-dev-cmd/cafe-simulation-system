@@ -28,11 +28,15 @@
    Body, fonts, background, global defaults
    ========================================================= */
 
-
 body {
   margin: 0;
   min-height: 100vh;
-  background: radial-gradient(circle at 20% 20%, #f8f2e8 0%, var(--bg) 55%, #e6e0d5 100%);
+  background: radial-gradient(
+    circle at 20% 20%,
+    #f8f2e8 0%,
+    var(--bg) 55%,
+    #e6e0d5 100%
+  );
   color: var(--text);
   font-family: "Trebuchet MS", "Verdana", sans-serif;
 }
@@ -48,7 +52,9 @@ body {
   color: var(--text);
   border: 2px solid var(--border);
   border-radius: 12px;
-  box-shadow: 0 10px 0 rgba(109, 100, 91, 0.18), 0 18px 26px rgba(84, 74, 62, 0.2);
+  box-shadow:
+    0 10px 0 rgba(109, 100, 91, 0.18),
+    0 18px 26px rgba(84, 74, 62, 0.2);
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -60,7 +66,11 @@ body {
   padding: 10px 12px;
   font-weight: 700;
   letter-spacing: 0.2px;
-  background: linear-gradient(180deg, var(--header) 0%, var(--header-strong) 100%);
+  background: linear-gradient(
+    180deg,
+    var(--header) 0%,
+    var(--header-strong) 100%
+  );
   border-bottom: 2px solid var(--border);
   cursor: move;
   user-select: none;
@@ -84,9 +94,15 @@ body {
   background: #f3ece1;
 }
 
-.window-dot:nth-child(1) { background: #e8b5b5; }
-.window-dot:nth-child(2) { background: #ead4ab; }
-.window-dot:nth-child(3) { background: #b7d6bd; }
+.window-dot:nth-child(1) {
+  background: #e8b5b5;
+}
+.window-dot:nth-child(2) {
+  background: #ead4ab;
+}
+.window-dot:nth-child(3) {
+  background: #b7d6bd;
+}
 
 .window-title {
   flex: 1;
@@ -113,7 +129,9 @@ body {
   top: 400px;
 }
 
-.hidden { display: none; }
+.hidden {
+  display: none;
+}
 
 .top-bar,
 .tabs {
@@ -144,11 +162,11 @@ body {
 .table-head.inventory,
 .row.inventory {
   grid-template-columns:
-    1fr     /* Item (name) */
-    140px   /* Qty (+/- controls) */
-    120px   /* Total Price */
-    120px   /* Actions (Buy) */
-    160px;  /* Stock (text + blocks) */
+    1fr /* Item (name) */
+    140px /* Qty (+/- controls) */
+    120px /* Total Price */
+    120px /* Actions (Buy) */
+    160px; /* Stock (text + blocks) */
 }
 
 /* =========================================================
@@ -157,12 +175,12 @@ body {
 .table-head.recipes,
 .row.recipes {
   grid-template-columns:
-    2.5fr   /* Product (name + info btn) */
-    2.5fr   /* Serve (price display) */
-    120px   /* Qty (+/- controls) */
-    145px   /* Actions (Make / Waste) */
-    120px   /* Production (progress bars) */
-    1.4fr;  /* Stock (blocks + count) */
+    2.5fr /* Product (name + info btn) */
+    2.5fr /* Serve (price display) */
+    120px /* Qty (+/- controls) */
+    145px /* Actions (Make / Waste) */
+    120px /* Production (progress bars) */
+    1.4fr; /* Stock (blocks + count) */
 }
 
 .table-head {
@@ -189,8 +207,12 @@ body {
   background: #fbf6ee;
 }
 
-.row.stock-zero { background: #f5e7e5; }
-.row.stock-low { background: #f4ecde; }
+.row.stock-zero {
+  background: #f5e7e5;
+}
+.row.stock-low {
+  background: #f4ecde;
+}
 
 .stock-cell {
   display: flex;
@@ -203,8 +225,12 @@ body {
   text-align: center;
 }
 
-.status.zero { color: #8a4f4f; }
-.status.low { color: #8a6a3f; }
+.status.zero {
+  color: #8a4f4f;
+}
+.status.low {
+  color: #8a6a3f;
+}
 
 .stock-blocks {
   display: flex;
@@ -225,9 +251,15 @@ body {
   border: 1px solid rgba(78, 69, 58, 0.28);
 }
 
-.stock-block.fresh { background: #9acfac; }
-.stock-block.warning { background: #e2c790; }
-.stock-block.spoiled { background: #dca5a5; }
+.stock-block.fresh {
+  background: #9acfac;
+}
+.stock-block.warning {
+  background: #e2c790;
+}
+.stock-block.spoiled {
+  background: #dca5a5;
+}
 
 .qty {
   display: inline-flex;
@@ -245,38 +277,57 @@ body {
   gap: 6px;
 }
 
-.text-center { text-align: center; }
+.text-center {
+  text-align: center;
+}
 
 /* =========================================================
    🔘 BUTTON SYSTEM
    Default + states (hover, active, disabled)
    ========================================================= */
 
+/* EXIT BUTTON (inherits base safely) */
+.btn-exit {
+  background-color: #e74c3c;
+  color: white;
+  font-weight: bold;
+}
+
+.btn-exit:hover {
+  background-color: #c0392b;
+}
+
+/* BASE BUTTON */
 button {
+  box-sizing: border-box; /* ✅ prevent size shift */
   border: 1px solid var(--border);
-  border-bottom-width: 2px;
+  border-bottom: 2px solid var(--border); /* ✅ explicit, stable */
   background: #f1e6d7;
   color: var(--text);
   border-radius: 8px;
   padding: 5px 10px;
   font-weight: 600;
-  transition: transform 120ms ease, filter 120ms ease, background 120ms ease;
+
+  transition:
+    filter 120ms ease,
+    background 120ms ease; /* ✅ no transform */
 }
 
+/* HOVER = visual only */
 button:hover:not(:disabled) {
   filter: brightness(0.97);
-  transform: translateY(-1px);
 }
 
+/* ACTIVE = visual only (no movement) */
 button:active:not(:disabled) {
-  transform: translateY(1px) scale(0.98);
+  filter: brightness(0.9);
 }
 
+/* DISABLED */
 button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
-
 .tab.active {
   background: var(--accent-soft);
   border-color: #877095;
@@ -287,10 +338,18 @@ button:disabled {
    Success, warning, error, highlights
    ========================================================= */
 
-.btn-green { background: #cfe9d7; }
-.btn-yellow { background: #f1e3c5; }
-.btn-red { background: #efcdcd; }
-.btn-waste { background: #ecd1d1; }
+.btn-green {
+  background: #cfe9d7;
+}
+.btn-yellow {
+  background: #f1e3c5;
+}
+.btn-red {
+  background: #efcdcd;
+}
+.btn-waste {
+  background: #ecd1d1;
+}
 
 .profit-value {
   color: #4f775c;
@@ -349,13 +408,24 @@ button:disabled {
   background: #f9f3ea;
 }
 
-.customer-panel-empty { opacity: 0.75; }
-.customer-subtext { font-size: 12px; opacity: 0.7; }
+.customer-panel-empty {
+  opacity: 0.75;
+}
+.customer-subtext {
+  font-size: 12px;
+  opacity: 0.7;
+}
 .customer-actions,
-.customer-progress-wrap { margin-top: 8px; }
+.customer-progress-wrap {
+  margin-top: 8px;
+}
 
-.serve-btn.is-ready { background: #d1e7d7; }
-.serve-btn.is-empty { background: #ecd6d6; }
+.serve-btn.is-ready {
+  background: #d1e7d7;
+}
+.serve-btn.is-empty {
+  background: #ecd6d6;
+}
 
 .customer-progress-track {
   height: 8px;
@@ -367,12 +437,20 @@ button:disabled {
 
 .customer-progress-fill {
   height: 100%;
-  transition: width 100ms linear, background 150ms linear;
+  transition:
+    width 100ms linear,
+    background 150ms linear;
 }
 
-.summary-line { margin-bottom: 8px; }
-.summary-gap { margin-top: 10px; }
-.summary-gap-lg { margin-top: 12px; }
+.summary-line {
+  margin-bottom: 8px;
+}
+.summary-gap {
+  margin-top: 10px;
+}
+.summary-gap-lg {
+  margin-top: 12px;
+}
 
 /* =========================================================
    💬 FEEDBACK & POPUPS
@@ -400,11 +478,21 @@ button:disabled {
   font-weight: 700;
 }
 
-.quick-info-popup { background: #ebe3f4; }
-.blocked-popup { background: #efd4d4; }
-.purchased-popup { background: #d6eadb; }
-.customer-popup { background: #e2ddf0; }
-.limit-popup { background: #efdfc8; }
+.quick-info-popup {
+  background: #ebe3f4;
+}
+.blocked-popup {
+  background: #efd4d4;
+}
+.purchased-popup {
+  background: #d6eadb;
+}
+.customer-popup {
+  background: #e2ddf0;
+}
+.limit-popup {
+  background: #efdfc8;
+}
 
 .popup-bar-container {
   width: 100%;
@@ -427,12 +515,24 @@ button:disabled {
    Motion, transitions, effects
    ========================================================= */
 
-.shake { animation: shake 0.3s; }
+.shake {
+  animation: shake 0.3s;
+}
 
 @keyframes shake {
-  0% { transform: translateX(0); }
-  25% { transform: translateX(-4px); }
-  50% { transform: translateX(4px); }
-  75% { transform: translateX(-4px); }
-  100% { transform: translateX(0); }
+  0% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-4px);
+  }
+  50% {
+    transform: translateX(4px);
+  }
+  75% {
+    transform: translateX(-4px);
+  }
+  100% {
+    transform: translateX(0);
+  }
 }

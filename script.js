@@ -35,10 +35,10 @@ const state = {
   },
 
   // ingredients
-  items: {
-    milk: 0,
-    beans: 0,
-    matcha: 0,
+  ingredients: {
+    milk: { level: 1 },
+    beans: { level: 1 },
+    matcha: { level: 1 },
   },
 
   // products
@@ -53,18 +53,40 @@ const state = {
     },
   },
 
+  // customers (current and past for tracking)
   customer: {
     list: [],
   },
 
+  // panel states, active views, temporary UI data
   ui: {
     activeTab: "inventory",
     activeInfoView: "cash",
     purchaseQty: { milk: 0, beans: 0, matcha: 0 },
+    mode: "menu",
   },
   recipes: {
     coffee: { qty: 0 },
     matchaLatte: { qty: 0 },
+  },
+
+  // ⚙️ EQUIPMENT SYSTEM [KITCHEN]
+  kitchen: {
+    machine: {
+      level: 1,
+      speedMultiplier: 1,
+    },
+    fridge: {
+      level: 1,
+      freshnessMultiplier: 1,
+    },
+  },
+
+  // reputation reviews (customer feedback for flavor, freshness, service)
+  reputation: {
+    score: 50,
+    level: "Neutral",
+    reviews: [], //
   },
 };
 
@@ -79,6 +101,13 @@ const MAX_PRODUCTION_QUEUE = 2;
 const MAX_STOCK = 12;
 const SERVE_PRICE = 5;
 const SPOIL_TIME = 20000; // 20 seconds
+
+// upgrade cost function (used for both machine speed and fridge freshness upgrades)
+function getUpgradeCost(base, level) {
+  return Math.floor(base * Math.pow(1.25, level - 1));
+}
+
+// customer definitions (name, order, dialogue, price, etc.)
 const CUSTOMERS = [
   {
     name: "Jack",
@@ -111,6 +140,7 @@ const mainPanelEl = document.getElementById("mainPanel");
 const infoPanelEl = document.getElementById("infoPanel");
 const customerBodyEl = document.getElementById("customerBody");
 const customerPanelEl = document.getElementById("customerPanel");
+const kitchenPanelEl = document.getElementById("kitchenPanel");
 
 // =========================================================
 // ⚙️ RUNTIME VARIABLES
@@ -292,6 +322,25 @@ function showProductionLimitPopup() {
 // Determines outcomes, states, calculations
 // =========================================================
 
+// update reputation level based on score
+function updateReputation() {
+  const r = state.reputation;
+
+  r.score = Math.max(0, Math.min(100, r.score));
+
+  if (r.score > 80) r.level = "Excellent";
+  else if (r.score > 60) r.level = "Good";
+  else if (r.score > 40) r.level = "Neutral";
+  else if (r.score > 20) r.level = "Bad";
+  else r.level = "Terrible";
+}
+
+// reset info panel to closed state (used when exiting to menu)
+function resetUIForMenu() {
+  infoPanelEl.classList.add("hidden");
+  state.ui.activeInfoView = "cash";
+}
+
 // determines make button state based on ingredients and cash
 function getMakeButtonState(product) {
   const qty = state.recipes[product].qty;
@@ -340,7 +389,11 @@ function updateCustomerProgressBar() {
 // determines stock state based on age for finished products
 function getStockState(item) {
   const age = Date.now() - item.createdAt;
-  const ratio = age / SPOIL_TIME;
+  const ingredientBoost = state.ingredients.milk.level * 0.05;
+
+  const freshness =
+    state.kitchen.fridge.freshnessMultiplier * (1 + ingredientBoost);
+  const ratio = age / (SPOIL_TIME * freshness);
 
   if (ratio < 0.5) return "fresh";
   if (ratio < 0.8) return "warning";
@@ -385,53 +438,47 @@ function processProductionQueue() {
 
 // inventory table
 function renderInventoryContent() {
-  const rows = [
+  const items = [
     { key: "milk", label: "Milk" },
     { key: "beans", label: "Coffee Beans" },
     { key: "matcha", label: "Matcha" },
-  ]
-    .map(({ key, label }) => {
-      const stock = state.items[key];
-      const qty = state.ui.purchaseQty[key];
-      const totalPrice = qty * PRICES[key];
-      const canBuy = qty > 0 && state.cash >= totalPrice;
-      const meta = stockMeta(stock);
+  ];
 
-      return `
-        <div class="row inventory ${meta.rowClass}">
+  // table header (ingredient, level, quality, cost, upgrade button)
+  return `
+    <div class="table-head inventory">
+      <div>Ingredient</div>
+      <div>Level</div>
+      <div>Quality</div>
+      <div>Cost</div>
+      <div>Upgrade</div>
+    </div>
+
+    ${items
+      .map(({ key, label }) => {
+        const lvl = state.ingredients[key].level;
+        const quality = (lvl - 1) * 10;
+        const cost = lvl * 20;
+
+        return `
+        <div class="row inventory">
           <div>${label}</div>
-
-          <div class="qty">
-            <button data-action="purchase-dec" data-item="${key}">-</button>
-            <span>${qty}</span>
-            <button data-action="purchase-inc" data-item="${key}">+</button>
-          </div>
-
-          <div class="text-center">$${totalPrice}</div>
-
+          <div>Lv ${lvl}</div>
+          <div>+${quality}%</div>
+          <div>$${cost}</div>
           <div>
-            <button data-action="buy" data-item="${key}" ${canBuy ? "" : "disabled"}>Buy</button>
-          </div>
-
-          <div class="stock-cell">
-            <div class="stock-text ${meta.statusClass}">
-              ${stock === 0 ? "Out of Stock" : stock <= 3 ? `${stock} Low` : stock}
-            </div>
+            <button 
+              data-action="upgrade-ingredient" 
+              data-item="${key}"
+              ${state.cash >= cost ? "" : "disabled"}
+            >
+              Upgrade
+            </button>
           </div>
         </div>
       `;
-    })
-    .join("");
-
-  return `
-    <div class="table-head inventory">
-      <div>Item</div>
-      <div>Qty</div>
-      <div>Total Price</div>
-      <div></div>
-      <div>Stock</div>
-    </div>
-    ${rows}
+      })
+      .join("")}
   `;
 }
 
@@ -632,7 +679,42 @@ function renderRecipesContent() {
   `;
 }
 
-// main render (rebuilds entire UI)
+// kitchen panel render (equipment upgrades)
+function renderKitchenPanel() {
+  const m = state.kitchen.machine;
+  const f = state.kitchen.fridge;
+
+  // upgrade cost calculation
+  const machineCost = getUpgradeCost(200, m.level);
+  const fridgeCost = getUpgradeCost(200, f.level);
+
+  return `
+  <div>
+    <strong>☕ Coffee Machine (Lv ${m.level})</strong>
+    <div>Speed: x${m.speedMultiplier.toFixed(1)}</div>
+    <button 
+      data-action="upgrade-speed"
+        ${state.cash >= machineCost ? "" : "disabled"}
+    >
+      Upgrade ($${machineCost})
+    </button>
+
+  <hr style="margin:10px 0;">
+
+  <div>
+    <strong>🧊 Fridge (Lv ${f.level})</strong>
+    <div>Freshness: x${f.freshnessMultiplier.toFixed(1)}</div>
+    <div>⏳ Spoil Time: ${((SPOIL_TIME * f.freshnessMultiplier) / 1000).toFixed(1)}s</div>
+    <button 
+      data-action="upgrade-fridge"
+        ${state.cash >= fridgeCost ? "" : "disabled"}
+    >
+      Upgrade ($${fridgeCost})
+    </button>
+`;
+}
+
+// customer panel render
 
 function renderCustomerPanel() {
   const customers = state.customer.list;
@@ -654,7 +736,11 @@ function renderCustomerPanel() {
       const elapsed = Date.now() - customer.startTime;
       const progress = Math.max(0, 1 - elapsed / customer.duration);
       const progressColor =
-        progress > 0.6 ? "var(--progress-good)" : progress > 0.3 ? "var(--progress-warn)" : "var(--progress-bad)";
+        progress > 0.6
+          ? "var(--progress-good)"
+          : progress > 0.3
+            ? "var(--progress-warn)"
+            : "var(--progress-bad)";
 
       return `
       <div class="customer-panel">
@@ -704,7 +790,30 @@ function renderCustomerPanel() {
     .join("");
 }
 
+// render main menu
+function renderMenu() {
+  mainBodyEl.innerHTML = `
+      <div style="text-align:center; padding:40px;">
+        <h2>Main Menu</h2>
+        <button data-action="start-game">Play Game</button>
+      </div>
+    `;
+
+  // hide other panels
+  customerPanelEl.classList.add("hidden");
+  kitchenPanelEl.classList.add("hidden");
+  infoPanelEl.classList.add("hidden");
+}
+
+// main render (view cash, stock, tabs, panels)
 function render() {
+  if (state.ui.mode === "menu") {
+    renderMenu();
+    return;
+  }
+
+  // game mode
+
   const totalFinishedStock =
     state.products.coffee.stock.length +
     state.products.matchaLatte.stock.length;
@@ -716,6 +825,7 @@ function render() {
 
   mainBodyEl.innerHTML = `
     <div class="top-bar">
+      <button data-action="exit-game" class="btn-exit">Exit</button>
       <button data-action="view-cash">Cash: $${state.cash}</button>
 
     <button data-action="view-servings">
@@ -725,6 +835,11 @@ function render() {
     <button data-action="view-expenses">
       Expenses: $${state.expenses.ingredients + state.expenses.waste}
     </button>
+
+    <button data-action="view-reputation">
+      ⭐ Reputation ${state.reputation.score} (${state.reputation.level})
+    </button>
+
     </div>
 
     <div class="tabs">
@@ -738,11 +853,12 @@ function render() {
   `;
 
   // customer panel content
-
   customerBodyEl.innerHTML = renderCustomerPanel();
 
-  // info panel content
+  // kitchen panel content
+  document.getElementById("kitchenBody").innerHTML = renderKitchenPanel();
 
+  // info panel content
   const view = state.ui.activeInfoView;
 
   let infoContent = "";
@@ -778,6 +894,9 @@ function render() {
     <div class="summary-line">Ingredients: Milk + Beans</div>
     <div class="summary-line">Sell Price: $${SERVE_PRICE}</div>
     <div class="summary-line">Batch Output: ${SERVINGS_PER_BATCH}</div>
+    <div class="summary-line">
+      Production Time: ${(COFFEE_PRODUCTION_TIME_MS / state.kitchen.machine.speedMultiplier / 1000).toFixed(1)}s
+    </div>
 
     <div class="summary-line summary-gap-lg"><strong>🍵 Matcha Latte</strong></div>
     <div class="summary-line">Stock: ${state.products.matchaLatte.stock.length}</div>
@@ -785,6 +904,9 @@ function render() {
     <div class="summary-line">Ingredients: Milk + Matcha</div>
     <div class="summary-line">Sell Price: $${SERVE_PRICE}</div>
     <div class="summary-line">Batch Output: ${SERVINGS_PER_BATCH}</div>
+    <div class="summary-line">
+      Production Time: ${(COFFEE_PRODUCTION_TIME_MS / state.kitchen.machine.speedMultiplier / 1000).toFixed(1)}s
+    </div>
   `;
   }
 
@@ -798,6 +920,28 @@ function render() {
     <div class="summary-line">Waste Cost: $${state.expenses.waste}</div>
 
     <div class="summary-line summary-gap"><strong>Total Expenses: $${totalExpenses}</strong></div>
+  `;
+  }
+
+  // reputation and reviews
+  if (view === "reputation") {
+    const r = state.reputation;
+
+    infoContent = `
+    <div class="summary-line"><strong>⭐ Reputation</strong></div>
+
+    <div class="summary-line">Score: ${r.score}</div>
+    <div class="summary-line">Level: ${r.level}</div>
+
+    <div class="summary-line summary-gap"><strong>Recent Reviews</strong></div>
+
+    ${
+      r.reviews.length
+        ? r.reviews
+            .map((rev) => `<div class="summary-line">"${rev}"</div>`)
+            .join("")
+        : `<div class="summary-line">No reviews yet</div>`
+    }
   `;
   }
 
@@ -824,10 +968,39 @@ function serveProduct(productType, id) {
   let base = customer.price;
   let tip = calculateTip(customer);
 
+  // update reputation based on customer phase when served
+  if (customer.phase === "good") state.reputation.score += 2;
+  if (customer.phase === "neutral") state.reputation.score += 0;
+  if (customer.phase === "bad") state.reputation.score -= 3;
+
+  updateReputation();
+
+  // add review based on customer phase
+  const reviewMap = {
+    good: ["Amazing service!", "Loved the drink ☕", "Will come again!"],
+    neutral: ["It was okay.", "Nothing special.", "Could be better."],
+    bad: ["Drink tasted off...", "Waited too long.", "Not great."],
+  };
+
+  const phaseReviews = reviewMap[customer.phase];
+  const review = phaseReviews[Math.floor(Math.random() * phaseReviews.length)];
+
+  state.reputation.reviews.unshift(review);
+
+  // keep only latest 3
+  state.reputation.reviews = state.reputation.reviews.slice(0, 3);
+
   // apply stock logic
   tip = Math.min(tip, mod.tip);
 
-  const finalAmount = base * mod.multiplier + tip;
+  // ingredient quality multiplier
+  const ingredientLevel =
+    state.ingredients[productType === "matchaLatte" ? "matcha" : "beans"].level;
+
+  const qualityMultiplier = 1 + (ingredientLevel - 1) * 0.1;
+
+  // final amount calculation
+  const finalAmount = (base * mod.multiplier + tip) * qualityMultiplier;
 
   // update customer mood based on stock quality
   if (mod.multiplier === 0) {
@@ -859,6 +1032,8 @@ function serveProduct(productType, id) {
 
 // spawn customer
 function spawnCustomer() {
+  if (state.ui.mode !== "game") return;
+
   if (state.customer.list.length >= 5) return;
 
   const base = getRandomCustomer();
@@ -878,6 +1053,10 @@ function spawnCustomer() {
     if (!state.customer.list.includes(newCustomer)) return;
 
     newCustomer.phase = "expired";
+    state.reputation.score -= 5;
+    updateReputation();
+
+    newCustomer.phase = "expired";
     render();
 
     setTimeout(() => {
@@ -890,7 +1069,7 @@ function spawnCustomer() {
   }, newCustomer.duration);
 
   // IMPORTANT: popup trigger
-  if (state.customer.list.length === 1) {
+  if (state.customer.list.length === 1 && state.ui.mode === "game") {
     showCustomerPopup();
   }
 
@@ -901,8 +1080,10 @@ function calculateTip(customer) {
   const elapsed = Date.now() - customer.startTime;
   const ratio = 1 - elapsed / customer.duration;
 
-  const tip = Math.max(0, Math.floor(customer.maxTip * ratio));
-  return tip;
+  const baseTip = Math.max(0, Math.floor(customer.maxTip * ratio));
+  const repBonus = state.reputation.score / 100;
+
+  return Math.floor(baseTip * (1 + repBonus));
 }
 
 // random customer generator
@@ -934,6 +1115,81 @@ function handleMainClick(event) {
 
   const action = target.dataset.action;
   const product = target.dataset.product;
+
+  // start game from menu
+  if (action === "start-game") {
+    state.ui.mode = "game";
+
+    // show panels again
+    customerPanelEl.classList.remove("hidden");
+    kitchenPanelEl.classList.remove("hidden");
+
+    render();
+    return;
+  }
+
+  if (action === "exit-game") {
+    state.ui.mode = "menu";
+    resetUIForMenu();
+    render();
+    return;
+  }
+
+  // EQUIPMENT UPGRADES
+
+  // upgrade machine speed
+  if (action === "upgrade-speed") {
+    const m = state.kitchen.machine;
+    const cost = getUpgradeCost(200, m.level);
+
+    if (state.cash < cost) return;
+
+    state.cash -= cost;
+    m.speedMultiplier += 0.2;
+    m.level++;
+
+    render();
+    return;
+  }
+
+  // upgrade fridge freshness
+  if (action === "upgrade-fridge") {
+    const f = state.kitchen.fridge;
+    const cost = getUpgradeCost(200, f.level);
+
+    if (state.cash < cost) return;
+
+    state.cash -= cost;
+    f.freshnessMultiplier += 0.3;
+    f.level++;
+
+    render();
+    return;
+  }
+
+  // upgrade ingredient quality
+  if (action === "upgrade-ingredient") {
+    const item = target.dataset.item;
+    const ing = state.ingredients[item];
+
+    const cost = Math.floor(20 * Math.pow(1.5, ing.level - 1));
+
+    if (state.cash < cost) return;
+
+    state.cash -= cost;
+    ing.level++;
+
+    render();
+    return;
+  }
+
+  // view reputation details
+  if (action === "view-reputation") {
+    state.ui.activeInfoView = "reputation";
+    infoPanelEl.classList.remove("hidden");
+    render();
+    return;
+  }
 
   // toggle info panel (removed)
   if (action === "toggle-info") {
@@ -1023,44 +1279,11 @@ function handleMainClick(event) {
     return;
   }
 
-  // increase purchase qty
-  if (action === "purchase-inc") {
-    const item = target.dataset.item;
-    const nextQty = state.ui.purchaseQty[item] + 1;
-    const nextTotal = nextQty * PRICES[item];
+  // increase purchase qty (disabled)
+  if (action === "purchase-inc") return;
 
-    if (state.cash >= nextTotal) {
-      state.ui.purchaseQty[item] = nextQty;
-      render();
-    } else {
-      showpurchaseBlockedPopup();
-    }
-
-    return;
-  }
-
-  // buy items
-  if (action === "purchase-dec") {
-    const item = target.dataset.item;
-    state.ui.purchaseQty[item] = Math.max(0, state.ui.purchaseQty[item] - 1);
-    render();
-    return;
-  }
-
-  if (action === "buy") {
-    const item = target.dataset.item;
-    const qty = state.ui.purchaseQty[item];
-    const total = qty * PRICES[item];
-    if (qty > 0 && state.cash >= total) {
-      state.items[item] += qty;
-      state.cash -= total;
-      state.expenses.ingredients += total;
-      state.ui.purchaseQty[item] = 0;
-      showPurchasedPopup();
-      render();
-    }
-    return;
-  }
+  // decrease purchase qty (disabled)
+  if (action === "purchase-dec") return;
 
   // recipe increase
   if (action === "recipe-inc") {
@@ -1073,7 +1296,9 @@ function handleMainClick(event) {
     const requiredSecond = product === "matchaLatte" ? nextQty : nextQty;
 
     // check production queue limit
-    if (state.products[product].productionQueue.length >= MAX_PRODUCTION_QUEUE) {
+    if (
+      state.products[product].productionQueue.length >= MAX_PRODUCTION_QUEUE
+    ) {
       showProductionLimitPopup();
       return;
     }
@@ -1188,6 +1413,9 @@ function handleMainClick(event) {
       return;
     }
 
+    // calculate production time with machine speed multiplier
+    const speed = state.kitchen.machine.speedMultiplier;
+
     productState.productionQueue.push({
       qty,
       startTime: Date.now(),
@@ -1195,7 +1423,8 @@ function handleMainClick(event) {
         Date.now() +
         (product === "matchaLatte"
           ? MATCHA_LATTE_PRODUCTION_TIME_MS
-          : COFFEE_PRODUCTION_TIME_MS),
+          : COFFEE_PRODUCTION_TIME_MS) /
+          speed,
     });
 
     render();
@@ -1242,21 +1471,27 @@ function init() {
   mainBodyEl.addEventListener("click", handleMainClick);
   customerBodyEl.addEventListener("click", handleMainClick);
   infoPanelEl.addEventListener("click", handleInfoClick);
+  kitchenPanelEl.addEventListener("click", handleMainClick);
 
+  // make panels draggable
   makePanelDraggable(mainPanelEl);
   makePanelDraggable(infoPanelEl);
   makePanelDraggable(customerPanelEl);
+  makePanelDraggable(kitchenPanelEl);
 
   render();
 
   // customer loop defined INSIDE
   function startCustomerLoop() {
-    setTimeout(() => {
-      if (state.customer.list.length < 5) {
-        spawnCustomer();
-      }
-      startCustomerLoop();
-    }, 5000);
+    setTimeout(
+      () => {
+        if (state.customer.list.length < 5) {
+          spawnCustomer();
+        }
+        startCustomerLoop();
+      },
+      5000 - state.reputation.score * 20,
+    );
   }
 
   // start it INSIDE
@@ -1267,8 +1502,7 @@ function init() {
 
   // process production queues and move to stock when done
   setInterval(() => {
-    processProductionQueue(); // ✅ NEW
-    render();
+    processProductionQueue();
   }, 500);
 }
 
