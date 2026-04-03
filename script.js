@@ -72,7 +72,21 @@ const state = {
     purchaseQty: { milk: 0, beans: 0, matcha: 0 },
     mode: "menu",
     showCustomerPopup: false,
+
+    panels: {
+      customers: true,
+      kitchen: true,
+    },
   },
+  // builder panel (dev mode)
+  builder: {
+    enabled: false, // toggle panel visibility
+    spawnRate: 5000,
+    productionTime: 8000,
+    maxQueue: null, // optional override
+  },
+
+  // current recipe quantities (how many servings to make per product)
   recipes: {
     coffee: { qty: 0 },
     matchaLatte: { qty: 0 },
@@ -82,7 +96,8 @@ const state = {
   kitchen: {
     machine: {
       level: 1,
-      speedMultiplier: 1,
+      speedMultiplier: 1, // faster production
+      capacity: 2, // max batches in production
     },
     fridge: {
       level: 1,
@@ -149,6 +164,8 @@ const infoPanelEl = document.getElementById("infoPanel");
 const customerBodyEl = document.getElementById("customerBody");
 const customerPanelEl = document.getElementById("customerPanel");
 const kitchenPanelEl = document.getElementById("kitchenPanel");
+const builderPanelEl = document.getElementById("builderPanel");
+const builderBodyEl = document.getElementById("builderBody");
 
 // =========================================================
 // ⚙️ RUNTIME VARIABLES
@@ -332,6 +349,16 @@ function showProductionLimitPopup() {
 // Determines outcomes, states, calculations
 // =========================================================
 
+// production time calculation (base time modified by machine speed and builder override)
+function getProductionTime(product) {
+  const baseTime =
+    product === "matchaLatte"
+      ? MATCHA_LATTE_PRODUCTION_TIME_MS
+      : COFFEE_PRODUCTION_TIME_MS;
+
+  return state.builder?.productionTime ?? baseTime;
+}
+
 // day night cycle toggle (for fun visual effect, no gameplay impact)
 function toggleDayNight() {
   document.body.classList.toggle("night");
@@ -468,6 +495,67 @@ function processProductionQueue() {
 // Converts state → HTML
 // If UI looks wrong, problem is here
 // =========================================================
+
+// render builder panel (dev tools for testing, not part of core game)
+function renderBuilderPanel() {
+  if (!state.builder.enabled) return "";
+
+  const b = state.builder;
+
+  return `
+    <div class="builder-panel">
+      <strong>🛠 Builder Panel</strong>
+
+      <div>
+        <label>
+          Customers
+          <input 
+            type="checkbox" 
+            data-action="toggle-customers"
+              ${state.ui.panels.customers ? "checked" : ""}
+          />
+        </label>
+
+        <label>
+          Kitchen
+          <input 
+            type="checkbox" 
+            data-action="toggle-kitchen"
+            ${state.ui.panels.kitchen ? "checked" : ""}
+          />
+        </label>
+      </div>
+
+      <hr/>
+
+      <div>
+        <label>☕ Coffee Price</label>
+        <input type="number" value="${SERVE_PRICE}" data-action="set-coffee-price"/>
+      </div>
+
+      <div>
+        <label>🥛 Milk Price</label>
+        <input type="number" value="${PRICES.milk}" data-action="set-milk-price"/>
+      </div>
+
+      <div>
+        <label>⏱ Production Time (ms)</label>
+        <input type="number" value="${b.productionTime}" data-action="set-production-time"/>
+      </div>
+
+      <div>
+        <label>📦 Max Queue</label>
+        <input type="number" value="${state.kitchen.machine.capacity}" data-action="set-max-queue"/>
+      </div>
+
+      <div>
+        <label>👥 Spawn Rate (ms)</label>
+        <input type="number" value="${b.spawnRate}" data-action="set-spawn-rate"/>
+      </div>
+
+    </div>
+  `;
+}
 
 // inventory table
 function renderInventoryContent() {
@@ -717,33 +805,44 @@ function renderKitchenPanel() {
   const m = state.kitchen.machine;
   const f = state.kitchen.fridge;
 
-  // upgrade cost calculation
-  const machineCost = getUpgradeCost(200, m.level);
+  const speedCost = getUpgradeCost(200, m.level);
+  const capacityCost = getUpgradeCost(200, m.capacity);
   const fridgeCost = getUpgradeCost(200, f.level);
 
   return `
   <div>
-    <strong>☕ Coffee Machine (Lv ${m.level})</strong>
-    <div>Speed: x${m.speedMultiplier.toFixed(1)}</div>
+    <strong>☕ Coffee Machine</strong>
+
+    <div>⚡ Speed: x${m.speedMultiplier.toFixed(1)}</div>
     <button 
       data-action="upgrade-speed"
-        ${state.cash >= machineCost ? "" : "disabled"}
+      ${state.cash >= speedCost ? "" : "disabled"}
     >
-      Upgrade ($${machineCost})
+      Upgrade Speed ($${speedCost})
     </button>
 
-  <hr style="margin:10px 0;">
+    <div style="margin-top:8px;">
+      📦 Capacity: ${m.capacity} batches
+    </div>
+    <button 
+      data-action="upgrade-capacity"
+      ${state.cash >= capacityCost ? "" : "disabled"}
+    >
+      Upgrade Capacity ($${capacityCost})
+    </button>
 
-  <div>
-    <strong>🧊 Fridge (Lv ${f.level})</strong>
-    <div>Freshness: x${f.freshnessMultiplier.toFixed(1)}</div>
-    <div>⏳ Spoil Time: ${((SPOIL_TIME * f.freshnessMultiplier) / 1000).toFixed(1)}s</div>
+    <hr style="margin:12px 0;">
+
+    <strong>🧊 Fridge</strong>
+
+    <div>❄️ Freshness: x${f.freshnessMultiplier.toFixed(1)}</div>
     <button 
       data-action="upgrade-fridge"
-        ${state.cash >= fridgeCost ? "" : "disabled"}
+      ${state.cash >= fridgeCost ? "" : "disabled"}
     >
-      Upgrade ($${fridgeCost})
+      Upgrade Freshness ($${fridgeCost})
     </button>
+  </div>
 `;
 }
 
@@ -836,6 +935,9 @@ function renderMenu() {
   customerPanelEl.classList.add("hidden");
   kitchenPanelEl.classList.add("hidden");
   infoPanelEl.classList.add("hidden");
+  if (builderPanelEl) {
+    builderPanelEl.classList.add("hidden");
+  }
 }
 
 // settings overlay render
@@ -848,6 +950,11 @@ function renderSettingsOverlay() {
         <button data-action="restart-game">Restart</button>
         <button data-action="exit-game">Exit to Menu</button>
         <button data-action="close-settings">Close</button>
+        <label>
+          Builder Mode
+        <input type="checkbox" data-action="toggle-builder" ${state.builder.enabled ? "checked" : ""}/>
+        </label>
+
       </div>
     </div>
   `;
@@ -899,6 +1006,16 @@ function render() {
       ${state.ui.activeTab === "inventory" ? renderInventoryContent() : renderRecipesContent()}
     </div>
   `;
+
+  // toggle panel visibility based on state
+  customerPanelEl.classList.toggle("hidden", !state.ui.panels.customers);
+  kitchenPanelEl.classList.toggle("hidden", !state.ui.panels.kitchen);
+
+  // builder panel (dev tools)
+  if (builderBodyEl && state.ui.mode === "game") {
+    builderBodyEl.innerHTML = renderBuilderPanel();
+    builderPanelEl.classList.toggle("hidden", !state.builder.enabled);
+  }
 
   // customer panel content
   customerBodyEl.innerHTML = renderCustomerPanel();
@@ -1168,6 +1285,47 @@ function handleMainClick(event) {
   const action = target.dataset.action;
   const product = target.dataset.product;
 
+  // toggle builder panel (dev tool)
+  if (action === "toggle-builder") {
+    state.builder.enabled = !state.builder.enabled;
+
+    if (builderPanelEl) {
+      builderPanelEl.classList.toggle("hidden", !state.builder.enabled);
+    }
+
+    render();
+    return;
+  }
+
+  // upgrade machine capacity (disabled)
+  if (action === "upgrade-capacity") {
+    const m = state.kitchen.machine;
+    const cost = getUpgradeCost(200, m.capacity);
+
+    if (state.cash < cost) return;
+
+    state.cash -= cost;
+    m.capacity += 1; // increase capacity by 1 batch
+
+    render();
+    return;
+  }
+
+  // toggle panels
+  if (action === "toggle-customers") {
+    const isOn = target.checked;
+    state.ui.panels.customers = isOn;
+    render();
+    return;
+  }
+
+  if (action === "toggle-kitchen") {
+    const isOn = target.checked;
+    state.ui.panels.kitchen = isOn;
+    render();
+    return;
+  }
+
   // start game from menu
   if (action === "start-game") {
     state.ui.mode = "game";
@@ -1267,12 +1425,6 @@ function handleMainClick(event) {
     return;
   }
 
-  // toggle info panel (removed)
-  if (action === "toggle-info") {
-    infoPanelEl.classList.toggle("hidden");
-    return;
-  }
-
   // view quick info about product
   if (action === "quick-info") {
     if (!product) return;
@@ -1362,7 +1514,7 @@ function handleMainClick(event) {
     const nextQty = state.recipes[product].qty + 1;
 
     // limit max queue based on machine level
-    const maxQueue = state.kitchen.machine.level + 1;
+    const maxQueue = state.kitchen.machine.capacity;
 
     if (nextQty > maxQueue) {
       showProductionLimitPopup();
@@ -1495,12 +1647,7 @@ function handleMainClick(event) {
     productState.productionQueue.push({
       qty,
       startTime: Date.now(),
-      endTime:
-        Date.now() +
-        (product === "matchaLatte"
-          ? MATCHA_LATTE_PRODUCTION_TIME_MS
-          : COFFEE_PRODUCTION_TIME_MS) /
-          speed,
+      endTime: Date.now() + getProductionTime(product) / speed,
     });
 
     render();
@@ -1545,30 +1692,63 @@ function makePanelDraggable(panelEl) {
 // =========================================================
 function init() {
   mainBodyEl.addEventListener("click", handleMainClick);
+  mainBodyEl.addEventListener("change", handleMainClick);
   customerBodyEl.addEventListener("click", handleMainClick);
   infoPanelEl.addEventListener("click", handleInfoClick);
   kitchenPanelEl.addEventListener("click", handleMainClick);
+  builderPanelEl.addEventListener("change", handleMainClick);
+  builderPanelEl.addEventListener("click", handleMainClick);
 
   // make panels draggable
   makePanelDraggable(mainPanelEl);
   makePanelDraggable(infoPanelEl);
   makePanelDraggable(customerPanelEl);
   makePanelDraggable(kitchenPanelEl);
+  if (builderPanelEl) {
+    makePanelDraggable(builderPanelEl);
+  }
 
   render();
 
   // customer loop defined INSIDE
   function startCustomerLoop() {
-    setTimeout(
-      () => {
-        if (state.customer.list.length < 5) {
-          spawnCustomer();
-        }
-        startCustomerLoop();
-      },
-      5000 - state.reputation.score * 20,
-    );
+    setTimeout(() => {
+      if (state.customer.list.length < 5) {
+        spawnCustomer();
+      }
+      startCustomerLoop();
+    }, state.builder.spawnRate);
   }
+
+  // builder panel input handling
+  document.addEventListener("input", (e) => {
+    const action = e.target.dataset.action;
+    if (!action) return;
+
+    const val = Number(e.target.value);
+
+    if (action === "set-coffee-price") {
+      window.SERVE_PRICE = val;
+    }
+
+    if (action === "set-milk-price") {
+      PRICES.milk = val;
+    }
+
+    if (action === "set-production-time") {
+      state.builder.productionTime = val;
+    }
+
+    if (action === "set-max-queue") {
+      state.kitchen.machine.capacity = val;
+    }
+
+    if (action === "set-spawn-rate") {
+      state.builder.spawnRate = val;
+    }
+
+    render();
+  });
 
   // start it INSIDE
   startCustomerLoop();

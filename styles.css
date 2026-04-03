@@ -142,20 +142,23 @@ body::after {
 }
 
 #mainPanel {
-  width: min(860px, 95vw);
   left: 60px;
   top: 60px;
 }
 
-#infoPanel {
-  width: min(360px, 90vw);
-  left: 60px;
-  top: 520px;
+#customerPanel {
+  left: 850px;
+  top: 60px;
 }
 
-#customerPanel {
+#kitchenPanel {
   left: 60px;
-  top: 400px;
+  top: 500px;
+}
+
+#infoPanel {
+  left: 500px;
+  top: 60px;
 }
 
 .hidden {
