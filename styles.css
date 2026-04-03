@@ -31,14 +31,43 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: radial-gradient(
-    circle at 20% 20%,
-    #f8f2e8 0%,
-    var(--bg) 55%,
-    #e6e0d5 100%
-  );
+
+  background: linear-gradient(180deg, #f6efe4 0%, #efe4d3 40%, #e6d7c3 100%);
+
   color: var(--text);
   font-family: "Trebuchet MS", "Verdana", sans-serif;
+}
+
+/* =========================================================
+   DAY AND NIGHT CYCLE
+   Subtle background overlay to simulate time of day changes
+   ========================================================= */
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 220, 180, 0.15); /* warm daylight */
+  pointer-events: none;
+  transition: background 1.5s ease;
+}
+
+body.night::before {
+  background: rgba(20, 30, 60, 0.5);
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(0, 0, 0, 0.02) 0px,
+    rgba(0, 0, 0, 0.02) 2px,
+    transparent 2px,
+    transparent 4px
+  );
+  pointer-events: none;
 }
 
 /* =========================================================
@@ -367,6 +396,31 @@ button:disabled {
   align-items: center;
   justify-content: center;
   padding: 0;
+}
+
+/* =========================================================
+    ⚙️ SETTINGS OVERLAY
+   ========================================================= */
+
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  backdrop-filter: blur(6px) grayscale(1);
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.settings-panel {
+  background: var(--panel);
+  border: 2px solid var(--border);
+  padding: 20px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 /* =========================================================

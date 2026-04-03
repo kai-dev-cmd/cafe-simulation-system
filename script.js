@@ -34,6 +34,13 @@ const state = {
     waste: 0,
   },
 
+  // for qty in recipes (autobuy)
+  items: {
+    milk: 0,
+    beans: 0,
+    matcha: 0,
+  },
+
   // ingredients
   ingredients: {
     milk: { level: 1 },
@@ -64,6 +71,7 @@ const state = {
     activeInfoView: "cash",
     purchaseQty: { milk: 0, beans: 0, matcha: 0 },
     mode: "menu",
+    showCustomerPopup: false,
   },
   recipes: {
     coffee: { qty: 0 },
@@ -266,6 +274,8 @@ function showPurchasedPopup() {
 
 // new customer pop up
 function showCustomerPopup() {
+  if (!state.ui.showCustomerPopup) return; // DISABLE SWITCH
+
   if (customerPopupActive) return;
 
   customerPopupActive = true;
@@ -322,6 +332,11 @@ function showProductionLimitPopup() {
 // Determines outcomes, states, calculations
 // =========================================================
 
+// day night cycle toggle (for fun visual effect, no gameplay impact)
+function toggleDayNight() {
+  document.body.classList.toggle("night");
+}
+
 // update reputation level based on score
 function updateReputation() {
   const r = state.reputation;
@@ -333,6 +348,24 @@ function updateReputation() {
   else if (r.score > 40) r.level = "Neutral";
   else if (r.score > 20) r.level = "Bad";
   else r.level = "Terrible";
+}
+
+// reset game state (used for restarting game)
+function resetGameState() {
+  state.cash = 100;
+
+  state.products.coffee.stock = [];
+  state.products.matchaLatte.stock = [];
+  state.products.coffee.productionQueue = [];
+  state.products.matchaLatte.productionQueue = [];
+
+  state.customer.list = [];
+
+  state.reputation = {
+    score: 50,
+    level: "Neutral",
+    reviews: [],
+  };
 }
 
 // reset info panel to closed state (used when exiting to menu)
@@ -805,6 +838,21 @@ function renderMenu() {
   infoPanelEl.classList.add("hidden");
 }
 
+// settings overlay render
+function renderSettingsOverlay() {
+  return `
+    <div class="settings-overlay">
+      <div class="settings-panel">
+        <h3>Settings</h3>
+
+        <button data-action="restart-game">Restart</button>
+        <button data-action="exit-game">Exit to Menu</button>
+        <button data-action="close-settings">Close</button>
+      </div>
+    </div>
+  `;
+}
+
 // main render (view cash, stock, tabs, panels)
 function render() {
   if (state.ui.mode === "menu") {
@@ -825,7 +873,7 @@ function render() {
 
   mainBodyEl.innerHTML = `
     <div class="top-bar">
-      <button data-action="exit-game" class="btn-exit">Exit</button>
+      <button data-action="open-settings" class="btn-exit">Settings</button>
       <button data-action="view-cash">Cash: $${state.cash}</button>
 
     <button data-action="view-servings">
@@ -945,6 +993,11 @@ function render() {
   `;
   }
 
+  // pause overlay
+  if (state.ui.paused) {
+    mainBodyEl.innerHTML += renderSettingsOverlay();
+  }
+
   infoBodyEl.innerHTML = infoContent;
 }
 
@@ -1032,8 +1085,7 @@ function serveProduct(productType, id) {
 
 // spawn customer
 function spawnCustomer() {
-  if (state.ui.mode !== "game") return;
-
+  if (state.ui.mode !== "game" || state.ui.paused) return;
   if (state.customer.list.length >= 5) return;
 
   const base = getRandomCustomer();
@@ -1128,8 +1180,32 @@ function handleMainClick(event) {
     return;
   }
 
+  // open settings (pause game)
+  if (action === "open-settings") {
+    state.ui.paused = true;
+    render();
+    return;
+  }
+
+  // close info panel if open
+  if (action === "close-settings") {
+    state.ui.paused = false;
+    render();
+    return;
+  }
+
+  // restart game
+  if (action === "restart-game") {
+    resetGameState();
+    state.ui.paused = false;
+    render();
+    return;
+  }
+
+  // exit game
   if (action === "exit-game") {
     state.ui.mode = "menu";
+    state.ui.paused = false;
     resetUIForMenu();
     render();
     return;
@@ -1502,6 +1578,8 @@ function init() {
 
   // process production queues and move to stock when done
   setInterval(() => {
+    if (state.ui.mode !== "game" || state.ui.paused) return;
+
     processProductionQueue();
   }, 500);
 }
