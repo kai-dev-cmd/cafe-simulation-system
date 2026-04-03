@@ -1304,13 +1304,6 @@ function handleMainClick(event) {
     return;
   }
 
-  // serve product to customer
-  if (action === "serve") {
-    if (!product) return;
-    serveProduct(product);
-    return;
-  }
-
   // accept customer from top bar
   if (action === "accept-customer") {
     acceptCustomer();
@@ -1368,13 +1361,18 @@ function handleMainClick(event) {
     const currentQueue = state.products[product].productionQueue.length;
     const nextQty = state.recipes[product].qty + 1;
 
+    // limit max queue based on machine level
+    const maxQueue = state.kitchen.machine.level + 1;
+
+    if (nextQty > maxQueue) {
+      showProductionLimitPopup();
+      return;
+    }
+
     const requiredMilk = nextQty;
     const requiredSecond = product === "matchaLatte" ? nextQty : nextQty;
 
-    // check production queue limit
-    if (
-      state.products[product].productionQueue.length >= MAX_PRODUCTION_QUEUE
-    ) {
+    if (state.products[product].productionQueue.length >= maxQueue) {
       showProductionLimitPopup();
       return;
     }
@@ -1484,7 +1482,9 @@ function handleMainClick(event) {
 
     state.recipes[product].qty = 0;
 
-    if (productState.productionQueue.length >= MAX_PRODUCTION_QUEUE) {
+    const maxQueue = state.kitchen.machine.level + 1;
+
+    if (productState.productionQueue.length >= maxQueue) {
       showProductionLimitPopup();
       return;
     }
