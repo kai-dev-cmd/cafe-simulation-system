@@ -111,6 +111,11 @@ const state = {
     level: "Neutral",
     reviews: [], //
   },
+
+  // ai memory history (for simulation analysis, not core game data)
+  ai: {
+    history: [],
+  },
 };
 
 // ======================
@@ -121,8 +126,8 @@ const SERVINGS_PER_BATCH = 3;
 const COFFEE_PRODUCTION_TIME_MS = 8000;
 const MATCHA_LATTE_PRODUCTION_TIME_MS = 15000;
 const MAX_PRODUCTION_QUEUE = 2;
+let SERVE_PRICE = 5;
 const MAX_STOCK = 12;
-const SERVE_PRICE = 5;
 const SPOIL_TIME = 20000; // 20 seconds
 
 // upgrade cost function (used for both machine speed and fridge freshness upgrades)
@@ -374,10 +379,15 @@ const ACTION_LABELS = {
 // run simulation analysis and generate insights
 function runSimulation() {
   const data = {
-    stock: {
-      milk: { current: state.items.milk, min: 5 },
-      beans: { current: state.items.beans, min: 5 },
-      matcha: { current: state.items.matcha, min: 5 },
+    products: {
+      coffee: {
+        stock: state.products.coffee.stock.length,
+        queue: state.products.coffee.productionQueue.length,
+      },
+      matchaLatte: {
+        stock: state.products.matchaLatte.stock.length,
+        queue: state.products.matchaLatte.productionQueue.length,
+      },
     },
     queue: {
       length: state.customer.list.length,
@@ -403,9 +413,23 @@ function runSimulation() {
         avgTip: 2,
       },
     },
+    history: state.ai.history,
   };
 
   const result = window.simulationEngine.analyzeSimulation(data);
+
+  const totalStock =
+    (data.products?.coffee?.stock || 0) +
+    (data.products?.matchaLatte?.stock || 0);
+
+  state.ai.history.push({
+    time: Date.now(),
+    stock: totalStock,
+    queue: data.queue.length,
+  });
+
+  // keep only last 5 (prevent memory bloat)
+  state.ai.history = state.ai.history.slice(-5);
 
   console.log(result);
 
@@ -1164,7 +1188,7 @@ function render() {
     <div class="summary-line">Sell Price: $${SERVE_PRICE}</div>
     <div class="summary-line">Batch Output: ${SERVINGS_PER_BATCH}</div>
     <div class="summary-line">
-      Production Time: ${(COFFEE_PRODUCTION_TIME_MS / state.kitchen.machine.speedMultiplier / 1000).toFixed(1)}s
+      Production Time: ${(MATCHA_LATTE_PRODUCTION_TIME_MS / state.kitchen.machine.speedMultiplier / 1000).toFixed(1)}s
     </div>
   `;
   }
@@ -1205,19 +1229,17 @@ function render() {
   }
 
   // =========================================================
-  // SIMULATION INSIGHTS
+  // SIMULATION INSIGHTS LOGIC
   // =========================================================
   // only show insights in game mode and when not already showing another view
-  if (view === "simulation") {
-    return; // 👈 prevent overwrite (temporary simple fix)
+  if (view !== "simulation") {
+    infoBodyEl.innerHTML = infoContent;
   }
 
   // pause overlay
   if (state.ui.paused) {
     mainBodyEl.innerHTML += renderSettingsOverlay();
   }
-
-  infoBodyEl.innerHTML = infoContent;
 }
 
 // =========================================================
@@ -1842,7 +1864,7 @@ function init() {
     const val = Number(e.target.value);
 
     if (action === "set-coffee-price") {
-      window.SERVE_PRICE = val;
+      SERVE_PRICE = val;
     }
 
     if (action === "set-milk-price") {
@@ -1872,7 +1894,7 @@ function init() {
     if (state.ui.mode !== "game" || state.ui.paused) return;
 
     processProductionQueue();
-    render(); // ✅ THIS FIXES LAG
+    render(); // THIS FIXES LAG
   }, 500);
 }
 

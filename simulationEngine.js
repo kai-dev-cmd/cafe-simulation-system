@@ -128,7 +128,7 @@ function analyzeEconomy(data) {
         type: "economy",
         target: product,
         severity: "high",
-        priority: 1,
+        priority: 0.7,
         action: "increase_price",
         message: `${product} is losing money (${profit.toFixed(2)} per sale)`,
       });
@@ -345,32 +345,55 @@ function analyzeProduction(data, config = DEFAULTS.production) {
   const targetOutput = toNumber(production?.targetOutput, 0);
   const downtimeRate = toNumber(production?.downtimeRate, 0);
   const defectRate = toNumber(production?.defectRate, 0);
+  const pressure =
+    data.queue?.capacity > 0 ? data.queue.length / data.queue.capacity : 0;
+  const coffee = data.products?.coffee;
+  const matcha = data.products?.matchaLatte;
+  const queue = data.queue;
+
+  const totalStock = (coffee?.stock || 0) + (matcha?.stock || 0);
+
+  const history = data.history || [];
+
+  if (history.length >= 3) {
+    const last3 = history.slice(-3);
+
+    const alwaysNoStock = last3.every((h) => h.stock === 0);
+
+    if (alwaysNoStock) {
+      insights.push({
+        type: "pattern",
+        severity: "high",
+        priority: 1,
+        action: "increase_production",
+        message: "You are consistently running out of drinks",
+      });
+    }
+  }
 
   if (targetOutput > 0) {
     const outputRatio = output / targetOutput;
 
-    if (outputRatio <= config.criticalOutputRatio) {
-      insights.push(
-        createInsight({
-          type: "production",
-          target: line,
-          severity: "critical",
-          priority: clamp(1 - outputRatio * 0.4, 0, 1),
-          action: `recover_output_${token}`,
-          message: `${line} output is critically below target (${output}/${targetOutput}).`,
-        }),
-      );
-    } else if (outputRatio < config.lowOutputRatio) {
-      insights.push(
-        createInsight({
-          type: "production",
-          target: line,
-          severity: "high",
-          priority: clamp(0.7 + (1 - outputRatio) * 0.2, 0, 1),
-          action: `improve_throughput_${token}`,
-          message: `${line} output is below target (${output}/${targetOutput}).`,
-        }),
-      );
+    if (totalStock === 0 && queue.length > 0) {
+      insights.push({
+        type: "flow",
+        severity: "high",
+        priority: 0.95,
+        action: "wait_production",
+        message:
+          "Customers waiting but no coffee ready — wait or speed up production",
+      });
+    }
+
+    // FLOW DETECTION
+    if (data.queue.length > 0 && totalStock === 0) {
+      insights.push({
+        type: "flow",
+        severity: "high",
+        priority: 0.95,
+        action: "start_production",
+        message: "Customers waiting but no drinks ready",
+      });
     }
   }
 
@@ -439,13 +462,7 @@ function runRules(data, rules) {
  * @returns {{insights:Array, topAction:Object|null}}
  */
 function analyzeSimulation(data = {}) {
-  const rules = [
-    analyzeStock,
-    analyzeQueue,
-    analyzeProduction,
-    analyzeProfit,
-    analyzeEconomy,
-  ]; // this
+  const rules = [analyzeQueue, analyzeProduction, analyzeEconomy]; // this
   const insights = sortInsightsByPriority(runRules(data, rules));
   return {
     insights,
