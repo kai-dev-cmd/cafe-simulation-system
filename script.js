@@ -349,6 +349,95 @@ function showProductionLimitPopup() {
 // Determines outcomes, states, calculations
 // =========================================================
 
+// average wait time for customers (used for insights and customer behavior)
+function getAverageWaitTime() {
+  const customers = state.customer.list;
+  if (!customers.length) return 0;
+
+  const total = customers.reduce((sum, c) => {
+    return sum + (Date.now() - c.startTime);
+  }, 0);
+
+  return total / customers.length;
+}
+
+// action labels for insights
+const ACTION_LABELS = {
+  restock_milk: "Restock milk",
+  restock_beans: "Restock coffee beans",
+  restock_matcha: "Restock matcha",
+  recover_output_production_line: "Start producing drinks",
+  scale_queue_customers: "Increase queue capacity",
+  optimize_queue_customers: "Improve customer flow",
+};
+
+// run simulation analysis and generate insights
+function runSimulation() {
+  const data = {
+    stock: {
+      milk: { current: state.items.milk, min: 5 },
+      beans: { current: state.items.beans, min: 5 },
+      matcha: { current: state.items.matcha, min: 5 },
+    },
+    queue: {
+      length: state.customer.list.length,
+      capacity: state.builder.maxQueue || 5,
+      avgWait: getAverageWaitTime(),
+      maxWait: 20000,
+    },
+    production: {
+      output:
+        state.products.coffee.stock.length +
+        state.products.matchaLatte.stock.length,
+      targetOutput: 10,
+    },
+    pricing: {
+      coffee: {
+        cost: PRICES.milk + PRICES.beans,
+        price: SERVE_PRICE,
+        avgTip: 2,
+      },
+      matchaLatte: {
+        cost: PRICES.milk + PRICES.matcha,
+        price: SERVE_PRICE,
+        avgTip: 2,
+      },
+    },
+  };
+
+  const result = window.simulationEngine.analyzeSimulation(data);
+
+  console.log(result);
+
+  showSimulationResult(result);
+}
+
+// show simulation result
+function showSimulationResult(result) {
+  const topActionKey = result.topAction?.action;
+  const topActionLabel = ACTION_LABELS[topActionKey] || topActionKey || "None";
+
+  // 👇 OPEN INFO PANEL
+  state.ui.activeInfoView = "simulation";
+  infoPanelEl.classList.remove("hidden");
+
+  // 👇 RENDER CONTENT
+  infoBodyEl.innerHTML = `
+    <div class="summary-line"><strong>🧠 AI Insights</strong></div>
+
+    <div class="summary-line">
+      <strong>Top Action:</strong> ${topActionLabel}
+    </div>
+
+    <div class="summary-gap"></div>
+
+    ${result.insights
+      .slice(0, 3)
+      .map((i) => `<div class="summary-line">• ${i.message}</div>`)
+      .join("")}
+  `;
+}
+
 // production time calculation (base time modified by machine speed and builder override)
 function getProductionTime(product) {
   const baseTime =
@@ -552,6 +641,10 @@ function renderBuilderPanel() {
         <label>👥 Spawn Rate (ms)</label>
         <input type="number" value="${b.spawnRate}" data-action="set-spawn-rate"/>
       </div>
+
+      <hr/>
+
+      <button onclick="runSimulation()">Run Analysis</button>
 
     </div>
   `;
@@ -891,17 +984,18 @@ function renderCustomerPanel() {
         ${
           customer.phase === "ordering"
             ? `
-        <div class="customer-actions">
-          <button 
-            data-action="serve-customer"
-            data-product="${customer.order}"
-            data-id="${customer.startTime}"
-            class="serve-btn ${hasStock ? "is-ready" : "is-empty"}"
-            ${hasStock ? "" : "disabled"}
-          >
-            Serve
-          </button>
-        </div>`
+          <div class="customer-actions">
+            <button 
+              data-action="serve-customer"
+              data-product="${customer.order}"
+              data-id="${customer.startTime}"
+              class="serve-btn ${hasStock ? "is-ready" : "is-empty"}"
+              ${hasStock ? "" : "disabled"}
+            >
+              ${hasStock ? "Serve" : "No Stock"}
+            </button>
+          </div>
+        `
             : ""
         }
 
@@ -1110,6 +1204,14 @@ function render() {
   `;
   }
 
+  // =========================================================
+  // SIMULATION INSIGHTS
+  // =========================================================
+  // only show insights in game mode and when not already showing another view
+  if (view === "simulation") {
+    return; // 👈 prevent overwrite (temporary simple fix)
+  }
+
   // pause overlay
   if (state.ui.paused) {
     mainBodyEl.innerHTML += renderSettingsOverlay();
@@ -1125,18 +1227,33 @@ function render() {
 
 // serve product to customer
 function serveProduct(productType, id) {
-  const customer = state.customer.list.find((c) => c.startTime == id);
+  const customer = state.customer.list.find(
+    (c) => String(c.startTime) === String(id),
+  );
   if (!customer) return;
 
   const product = state.products[productType];
   if (!product || product.stock.length <= 0) return;
   if (customer.order !== productType) return;
 
+  // 1. take item
   const item = product.stock.shift(); // take 1 serving
   const mod = getStockModifier(item);
 
+  // 2. SET PHASE FIRST
+  if (mod.multiplier === 0) {
+    customer.phase = "bad";
+  } else if (mod.tip === 1) {
+    customer.phase = "neutral";
+  } else {
+    customer.phase = "good";
+  }
+
+  // 3. THEN calculate everything else
   let base = customer.price;
   let tip = calculateTip(customer);
+
+  // reputation + reviews now use CORRECT phase
 
   // update reputation based on customer phase when served
   if (customer.phase === "good") state.reputation.score += 2;
@@ -1172,15 +1289,6 @@ function serveProduct(productType, id) {
   // final amount calculation
   const finalAmount = (base * mod.multiplier + tip) * qualityMultiplier;
 
-  // update customer mood based on stock quality
-  if (mod.multiplier === 0) {
-    customer.phase = "bad";
-  } else if (mod.tip === 1) {
-    customer.phase = "neutral";
-  } else {
-    customer.phase = "good";
-  }
-
   // update cash and show popup
   state.cash += finalAmount;
   showServePopup(finalAmount);
@@ -1189,15 +1297,19 @@ function serveProduct(productType, id) {
   state.products[productType].totalServed =
     (state.products[productType].totalServed || 0) + 1;
 
+  // 4. update UI
+  render();
+
+  // DELAY removal (let player SEE reaction)
   setTimeout(() => {
     const index = state.customer.list.indexOf(customer);
     if (index !== -1) {
       state.customer.list.splice(index, 1);
       render();
     }
-  }, 2500);
+  }, 2000); // slightly shorter = snappier
 
-  render();
+  console.log("SERVE CLICKED", productType, id);
 }
 
 // spawn customer
@@ -1482,12 +1594,14 @@ function handleMainClick(event) {
 
     const wasteCost = spoiled.length * 2;
 
+    // 💸 apply cost
+    state.expenses.waste += wasteCost;
+    state.cash -= wasteCost;
+
+    // ✅ REMOVE spoiled items
     productState.stock = productState.stock.filter(
       (item) => getStockState(item) !== "spoiled",
     );
-
-    state.expenses.waste += wasteCost;
-    state.cash -= wasteCost;
 
     render();
     return;
@@ -1753,14 +1867,12 @@ function init() {
   // start it INSIDE
   startCustomerLoop();
 
-  // lightweight UI updates
-  setInterval(updateCustomerProgressBar, 100);
-
   // process production queues and move to stock when done
   setInterval(() => {
     if (state.ui.mode !== "game" || state.ui.paused) return;
 
     processProductionQueue();
+    render(); // ✅ THIS FIXES LAG
   }, 500);
 }
 
