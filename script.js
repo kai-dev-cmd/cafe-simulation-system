@@ -1,27 +1,27 @@
 // =========================================================
-// 📍 QUICK NAVIGATION MAP
+//  QUICK NAVIGATION MAP
 // Jump instantly using Cmd + F (search keywords below)
 //
-// 🧠 [STATE] → Game data (cash, items, products, UI)
-// ⚖️ [CONSTANTS] → Prices, limits, timings
-// 🔗 [DOM] → HTML element hooks
-// ⚙️ [RUNTIME] → Temporary UI states (popups, timers)
+//  [STATE] → Game data (cash, items, products, UI)
+//  [CONSTANTS] → Prices, limits, timings
+//  [DOM] → HTML element hooks
+//  [RUNTIME] → Temporary UI states (popups, timers)
 //
-// 💬 [POPUP] → All popup systems (feedback, alerts)
-// 🧩 [LOGIC] → Core logic (stock, button states, calculations)
-// ⚙️ [PRODUCTION] → Queue → production → stock
+//  [POPUP] → All popup systems (feedback, alerts)
+//  [LOGIC] → Core logic (stock, button states, calculations)
+//  [PRODUCTION] → Queue → production → stock
 //
-// 🖥️ [RENDER] → UI generation (inventory, recipes, panels)
-// 🧍 [CUSTOMER] → Spawn, serve, behavior, tips
+//  [RENDER] → UI generation (inventory, recipes, panels)
+//  [CUSTOMER] → Spawn, serve, behavior, tips
 //
-// 🎮 [EVENT] → User actions (click handling)
-// 🪟 [UI] → Dragging panels, UI interactions
+//  [EVENT] → User actions (click handling)
+//  [UI] → Dragging panels, UI interactions
 //
-// 🚀 [INIT] → Game start + loops
+//  [INIT] → Game start + loops
 // =========================================================
 
 // =========================================================
-// 🧠 GAME STATE
+//  GAME STATE
 // All dynamic data lives here (money, stock, customers, UI)
 // =========================================================
 const state = {
@@ -173,7 +173,7 @@ const builderPanelEl = document.getElementById("builderPanel");
 const builderBodyEl = document.getElementById("builderBody");
 
 // =========================================================
-// ⚙️ RUNTIME VARIABLES
+// RUNTIME VARIABLES
 // Temporary UI/system states (popups, timers, flags)
 // Not part of core game data
 // =========================================================
@@ -349,7 +349,7 @@ function showProductionLimitPopup() {
 }
 
 // =========================================================
-// 🧩 HELPER LOGIC
+// HELPER LOGIC
 // Pure logic (no UI)
 // Determines outcomes, states, calculations
 // =========================================================
@@ -441,11 +441,11 @@ function showSimulationResult(result) {
   const topActionKey = result.topAction?.action;
   const topActionLabel = ACTION_LABELS[topActionKey] || topActionKey || "None";
 
-  // 👇 OPEN INFO PANEL
+  // OPEN INFO PANEL
   state.ui.activeInfoView = "simulation";
   infoPanelEl.classList.remove("hidden");
 
-  // 👇 RENDER CONTENT
+  // RENDER CONTENT
   infoBodyEl.innerHTML = `
     <div class="summary-line"><strong>🧠 AI Insights</strong></div>
 
@@ -604,7 +604,7 @@ function processProductionQueue() {
 }
 
 // =========================================================
-// 🖥️ RENDER SYSTEM (UI Builder)
+// RENDER SYSTEM (UI Builder)
 // Converts state → HTML
 // If UI looks wrong, problem is here
 // =========================================================
