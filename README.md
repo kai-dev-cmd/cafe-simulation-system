@@ -2,6 +2,8 @@
 
 Browser-based cafe management and simulation system focused on inventory flow, production logic, customer behavior, and operational balancing.
 
+![All Panels](./screenshots/allpanels.jpeg)
+
 ## Features
 - Inventory and production systems
 - Machine capacity simulation
@@ -37,3 +39,14 @@ The project focuses on interconnected gameplay systems:
 
 ## Live Demo
 [Open Project](https://project-dinerdash.vercel.app/)
+
+## Preview
+
+### Main Interface
+![Main UI](./screenshots/mainmenupanel.jpeg)
+
+### Kitchen System
+![Kitchen Panel](./screenshots/kitchenpanel.jpeg)
+
+### Customer Flow
+![Customer Panel](./screenshots/customerpanel.jpeg)
