@@ -1,6 +1,10 @@
 # Cafe Simulation System
 
-Browser-based cafe management and simulation system focused on inventory flow, production logic, customer behavior, and operational balancing.
+<p>
+  <em>
+    Browser-based cafe management and simulation system focused on inventory flow, production logic, customer behavior, and operational balancing.
+  </em>
+</p>
 
 ![All Panels](./screenshots/allpanels.jpeg)
 
@@ -42,11 +46,14 @@ The project focuses on interconnected gameplay systems:
 
 ## Preview
 
-### Main Interface
-![Main UI](./screenshots/mainmenupanel.jpeg)
-
 ### Kitchen System
+
+Production subsystem managing machine speed, capacity, and freshness mechanics.
+
 ![Kitchen Panel](./screenshots/kitchenpanel.jpeg)
 
 ### Customer Flow
+
+Customer queue and order simulation with dynamic demand and satisfaction tracking.
+
 ![Customer Panel](./screenshots/customerpanel.jpeg)
