@@ -72,6 +72,14 @@ const state = {
     purchaseQty: { milk: 0, beans: 0, matcha: 0 },
     mode: "menu",
     showCustomerPopup: false,
+    tutorial: {
+      active: false,
+      stepIndex: 0,
+      completed: false,
+      scriptedCustomerSpawned: false,
+      previousCustomerSettings: null,
+      servedCountAtStart: 0,
+    },
 
     panels: {
       customers: true,
@@ -129,6 +137,7 @@ const MAX_PRODUCTION_QUEUE = 2;
 let SERVE_PRICE = 5;
 const MAX_STOCK = 12;
 const SPOIL_TIME = 20000; // 20 seconds
+const TUTORIAL_CUSTOMER_DURATION = 60000;
 
 // upgrade cost function (used for both machine speed and fridge freshness upgrades)
 function getUpgradeCost(base, level) {
@@ -154,6 +163,79 @@ const CUSTOMERS = [
     thankYou: "Yay thanks! This looks so good 💚",
     angry: "Umm… hello?? I’ve been waiting 😒",
     price: 5,
+  },
+];
+
+const TUTORIAL_STEPS = [
+  {
+    id: "welcome",
+    title: "Welcome to Your Shop",
+    body: "Let's make one coffee, serve one customer, and watch the shop numbers move. We'll go slowly.",
+    target: "main",
+    helper: "Press Next when you're ready.",
+  },
+  {
+    id: "status",
+    title: "Read the Counter",
+    body: "This top row tracks cash, ready servings, expenses, and reputation. These are your core business signals.",
+    target: "status",
+    helper: "Press Next to start making a drink.",
+  },
+  {
+    id: "recipes",
+    title: "Open Recipes",
+    body: "Recipes are where you queue drinks for production. Open the Recipes tab.",
+    target: "recipes-tab",
+    helper: "Click Recipes.",
+  },
+  {
+    id: "quantity",
+    title: "Choose a Coffee Batch",
+    body: "Increase Coffee quantity to make one batch. The game will buy missing ingredients when you make it.",
+    target: "coffee-qty",
+    helper: "Click the + button on Coffee.",
+  },
+  {
+    id: "make",
+    title: "Start Production",
+    body: "Now make the coffee. Cash will drop because milk and beans are purchased automatically.",
+    target: "coffee-actions",
+    helper: "Click Make on Coffee.",
+  },
+  {
+    id: "production",
+    title: "Wait for the Machine",
+    body: "The production bar counts down while the coffee brews. When it finishes, servings move into stock.",
+    target: "coffee-production",
+    helper: "Wait until Coffee shows ready stock.",
+  },
+  {
+    id: "customer",
+    title: "A Customer Arrives",
+    body: "Great. We'll bring in one slow coffee customer so you can serve without pressure.",
+    target: "customers",
+    helper: "Press Next once the customer appears.",
+  },
+  {
+    id: "serve",
+    title: "Serve the Coffee",
+    body: "Serve the waiting customer. Fresh drinks can earn a tip and improve reputation.",
+    target: "serve",
+    helper: "Click Serve in the Customers panel.",
+  },
+  {
+    id: "results",
+    title: "Check the Result",
+    body: "Cash and reputation update after service. Info panels can explain revenue, servings, expenses, and reviews.",
+    target: "status",
+    helper: "Press Next to finish the tutorial.",
+  },
+  {
+    id: "finish",
+    title: "You're Open",
+    body: "That's the main loop: make drinks, watch freshness, serve customers, and upgrade when you can.",
+    target: "main",
+    helper: "Finish returns the shop to normal customer flow.",
   },
 ];
 
@@ -447,7 +529,7 @@ function showSimulationResult(result) {
 
   // RENDER CONTENT
   infoBodyEl.innerHTML = `
-    <div class="summary-line"><strong>🧠 AI Insights</strong></div>
+    <div class="summary-line"><strong class="summary-title">AI Insights</strong></div>
 
     <div class="summary-line">
       <strong>Top Action:</strong> ${topActionLabel}
@@ -498,6 +580,15 @@ function resetGameState() {
   state.products.matchaLatte.stock = [];
   state.products.coffee.productionQueue = [];
   state.products.matchaLatte.productionQueue = [];
+  state.products.coffee.totalServed = 0;
+  state.products.matchaLatte.totalServed = 0;
+  state.recipes.coffee.qty = 0;
+  state.recipes.matchaLatte.qty = 0;
+  state.items.milk = 0;
+  state.items.beans = 0;
+  state.items.matcha = 0;
+  state.expenses.ingredients = 0;
+  state.expenses.waste = 0;
 
   state.customer.list = [];
 
@@ -506,12 +597,191 @@ function resetGameState() {
     level: "Neutral",
     reviews: [],
   };
+
+  resetTutorialState();
 }
 
 // reset info panel to closed state (used when exiting to menu)
 function resetUIForMenu() {
   infoPanelEl.classList.add("hidden");
   state.ui.activeInfoView = "cash";
+}
+
+function resetTutorialState() {
+  state.ui.tutorial.active = false;
+  state.ui.tutorial.stepIndex = 0;
+  state.ui.tutorial.completed = false;
+  state.ui.tutorial.scriptedCustomerSpawned = false;
+  state.ui.tutorial.previousCustomerSettings = null;
+  state.ui.tutorial.servedCountAtStart = 0;
+}
+
+function getTutorialStep() {
+  return TUTORIAL_STEPS[state.ui.tutorial.stepIndex] || TUTORIAL_STEPS[0];
+}
+
+function getTutorialTargetClass(target) {
+  if (!state.ui.tutorial.active) return "";
+  return getTutorialStep().target === target ? " tutorial-target-active" : "";
+}
+
+function isTutorialStepComplete(step = getTutorialStep()) {
+  if (!state.ui.tutorial.active) return false;
+
+  switch (step.id) {
+    case "recipes":
+      return state.ui.activeTab === "recipes";
+    case "quantity":
+      return state.recipes.coffee.qty > 0;
+    case "make":
+      return state.products.coffee.productionQueue.length > 0;
+    case "production":
+      return state.products.coffee.stock.length > 0;
+    case "customer":
+      return state.customer.list.some((customer) => customer.tutorial);
+    case "serve":
+      return (
+        (state.products.coffee.totalServed || 0) >
+        state.ui.tutorial.servedCountAtStart
+      );
+    default:
+      return true;
+  }
+}
+
+function startTutorial() {
+  resetGameState();
+
+  state.ui.mode = "game";
+  state.ui.paused = false;
+  state.ui.activeTab = "inventory";
+  state.ui.activeInfoView = "cash";
+  state.ui.panels.customers = true;
+  state.ui.panels.kitchen = true;
+  state.ui.tutorial.active = true;
+  state.ui.tutorial.stepIndex = 0;
+  state.ui.tutorial.completed = false;
+  state.ui.tutorial.scriptedCustomerSpawned = false;
+  state.ui.tutorial.previousCustomerSettings = {
+    spawnRate: state.builder.spawnRate,
+  };
+  state.ui.tutorial.servedCountAtStart = state.products.coffee.totalServed || 0;
+
+  customerPanelEl.classList.remove("hidden");
+  kitchenPanelEl.classList.remove("hidden");
+  render();
+}
+
+function finishTutorial({ skipped = false } = {}) {
+  const previousSettings = state.ui.tutorial.previousCustomerSettings;
+  if (previousSettings) {
+    state.builder.spawnRate = previousSettings.spawnRate;
+  }
+
+  state.ui.tutorial.active = false;
+  state.ui.tutorial.completed = !skipped;
+  state.ui.tutorial.stepIndex = 0;
+  state.ui.tutorial.scriptedCustomerSpawned = false;
+  state.ui.tutorial.previousCustomerSettings = null;
+  state.ui.tutorial.servedCountAtStart = 0;
+  render();
+}
+
+function setTutorialStep(index) {
+  const maxIndex = TUTORIAL_STEPS.length - 1;
+  state.ui.tutorial.stepIndex = Math.max(0, Math.min(maxIndex, index));
+  runTutorialStepEffects();
+  render();
+}
+
+function advanceTutorialIfComplete() {
+  if (!state.ui.tutorial.active) return;
+  if (!isTutorialStepComplete()) return;
+
+  const nextIndex = state.ui.tutorial.stepIndex + 1;
+  if (nextIndex >= TUTORIAL_STEPS.length) {
+    finishTutorial();
+    return;
+  }
+
+  setTutorialStep(nextIndex);
+}
+
+function runTutorialStepEffects() {
+  if (!state.ui.tutorial.active) return;
+
+  const step = getTutorialStep();
+  if (step.id === "customer" && !state.ui.tutorial.scriptedCustomerSpawned) {
+    spawnTutorialCustomer();
+  }
+}
+
+function spawnTutorialCustomer() {
+  if (state.ui.tutorial.scriptedCustomerSpawned) return;
+  if (state.products.coffee.stock.length <= 0) return;
+
+  const base = CUSTOMERS.find((customer) => customer.order === "coffee");
+  if (!base) return;
+
+  state.customer.list = state.customer.list.filter(
+    (customer) => customer.tutorial,
+  );
+
+  state.customer.list.push({
+    ...base,
+    duration: TUTORIAL_CUSTOMER_DURATION,
+    startTime: Date.now(),
+    phase: "ordering",
+    maxTip: 5,
+    tutorial: true,
+  });
+
+  state.ui.tutorial.scriptedCustomerSpawned = true;
+}
+
+function renderTutorialOverlay() {
+  if (!state.ui.tutorial.active) return "";
+
+  const step = getTutorialStep();
+  const isComplete = isTutorialStepComplete(step);
+  const isFirstStep = state.ui.tutorial.stepIndex === 0;
+  const isLastStep = state.ui.tutorial.stepIndex === TUTORIAL_STEPS.length - 1;
+  const progress = `${state.ui.tutorial.stepIndex + 1}/${TUTORIAL_STEPS.length}`;
+
+  return `
+    <div class="tutorial-overlay" aria-live="polite">
+      <div class="tutorial-scrim" aria-hidden="true"></div>
+      <div class="tutorial-card">
+        <div class="tutorial-progress">Step ${progress}</div>
+        <h3>${step.title}</h3>
+        <p>${step.body}</p>
+        <div class="tutorial-helper">${isComplete ? "Nice. You can continue." : step.helper}</div>
+        <div class="tutorial-actions">
+          <button data-action="tutorial-back" ${isFirstStep ? "disabled" : ""}>Back</button>
+          <button data-action="tutorial-skip">Skip</button>
+          <button class="btn-green" data-action="tutorial-next" ${isComplete ? "" : "disabled"}>
+            ${isLastStep ? "Finish" : "Next"}
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function syncTutorialTargetClasses() {
+  [mainPanelEl, customerPanelEl, kitchenPanelEl, infoPanelEl].forEach((panel) => {
+    panel.classList.remove("tutorial-target-active");
+  });
+
+  if (!state.ui.tutorial.active) return;
+
+  const target = getTutorialStep().target;
+  if (target === "main") {
+    mainPanelEl.classList.add("tutorial-target-active");
+  }
+  if (target === "customers" || target === "serve") {
+    customerPanelEl.classList.add("tutorial-target-active");
+  }
 }
 
 // determines make button state based on ingredients and cash
@@ -561,6 +831,8 @@ function updateCustomerProgressBar() {
 
 // determines stock state based on age for finished products
 function getStockState(item) {
+  if (state.ui.tutorial.active) return "fresh";
+
   const age = Date.now() - item.createdAt;
   const ingredientBoost = state.ingredients.milk.level * 0.05;
 
@@ -617,9 +889,9 @@ function renderBuilderPanel() {
 
   return `
     <div class="builder-panel">
-      <strong>🛠 Builder Panel</strong>
+      <strong>Builder Panel</strong>
 
-      <div>
+      <div class="builder-toggle-row">
         <label>
           Customers
           <input 
@@ -641,29 +913,31 @@ function renderBuilderPanel() {
 
       <hr/>
 
-      <div>
-        <label>☕ Coffee Price</label>
+      <div class="builder-grid">
+      <div class="builder-field">
+        <label>Coffee Price</label>
         <input type="number" value="${SERVE_PRICE}" data-action="set-coffee-price"/>
       </div>
 
-      <div>
-        <label>🥛 Milk Price</label>
+      <div class="builder-field">
+        <label>Milk Price</label>
         <input type="number" value="${PRICES.milk}" data-action="set-milk-price"/>
       </div>
 
-      <div>
-        <label>⏱ Production Time (ms)</label>
+      <div class="builder-field">
+        <label>Production Time (ms)</label>
         <input type="number" value="${b.productionTime}" data-action="set-production-time"/>
       </div>
 
-      <div>
-        <label>📦 Max Queue</label>
+      <div class="builder-field">
+        <label>Max Queue</label>
         <input type="number" value="${state.kitchen.machine.capacity}" data-action="set-max-queue"/>
       </div>
 
-      <div>
-        <label>👥 Spawn Rate (ms)</label>
+      <div class="builder-field">
+        <label>Spawn Rate (ms)</label>
         <input type="number" value="${b.spawnRate}" data-action="set-spawn-rate"/>
+      </div>
       </div>
 
       <hr/>
@@ -700,10 +974,10 @@ function renderInventoryContent() {
 
         return `
         <div class="row inventory">
-          <div>${label}</div>
-          <div>Lv ${lvl}</div>
-          <div>+${quality}%</div>
-          <div>$${cost}</div>
+          <div class="product-cell"><span class="product-title">${label}</span></div>
+          <div><strong>Lv ${lvl}</strong></div>
+          <div class="cell-note">+${quality}% quality</div>
+          <div class="serve-price">$${cost}</div>
           <div>
             <button 
               data-action="upgrade-ingredient" 
@@ -758,20 +1032,20 @@ function renderRecipesContent() {
     </div>
 
     <div class="row recipes ${coffeeMeta.rowClass}">
-      <div>
-        <button class="info-btn" data-action="quick-info" data-product="coffee">i</button>
-          Coffee
+      <div class="product-cell">
+        <button class="info-btn" data-action="quick-info" data-product="coffee" aria-label="Show coffee recipe" title="Recipe info">i</button>
+          <span class="product-title">Coffee</span>
         </div>
-      <div>$${SERVE_PRICE} / per serving</div>
+      <div class="serve-price">$${SERVE_PRICE} <span>/ serving</span></div>
 
-    <div class="qty">
-      <button data-action="recipe-dec" data-product="coffee">-</button>
-      <span>${coffeeQty}</span>
-      <button data-action="recipe-inc" data-product="coffee">+</button>
+    <div class="qty${getTutorialTargetClass("coffee-qty")}">
+      <button data-action="recipe-dec" data-product="coffee" aria-label="Decrease coffee batch quantity">-</button>
+      <span class="qty-value">${coffeeQty}</span>
+      <button data-action="recipe-inc" data-product="coffee" aria-label="Increase coffee batch quantity">+</button>
       ${coffeeTotalCost > 0 ? `<span class="qty-cost">-$${coffeeTotalCost}</span>` : ""}
     </div>
 
-    <div class="row-actions">
+    <div class="row-actions${getTutorialTargetClass("coffee-actions")}">
       ${(() => {
         const stateBtn = getMakeButtonState("coffee");
         return `
@@ -798,7 +1072,7 @@ function renderRecipesContent() {
       </button>
     </div>
 
-    <div>
+    <div class="${getTutorialTargetClass("coffee-production").trim()}">
       ${
         state.products.coffee.productionQueue.length
           ? state.products.coffee.productionQueue
@@ -817,13 +1091,13 @@ function renderRecipesContent() {
   `;
               })
               .join("")
-          : "Idle"
+          : '<span class="idle-state">Idle</span>'
       }
     </div>
 
     <div class="stock-cell">
-      <div>
-        ${coffeeStock.length === 0 ? "Item 86" : coffeeStock.length}
+      <div class="stock-text ${coffeeMeta.statusClass ? `status ${coffeeMeta.statusClass}` : ""}">
+        ${coffeeStock.length === 0 ? "Sold out" : `${coffeeStock.length} ready`}
       </div>
         <div class="stock-blocks">
         ${state.products.coffee.stock
@@ -837,16 +1111,16 @@ function renderRecipesContent() {
 </div>
 
     <div class="row recipes ${matchaMeta.rowClass}">
-      <div>
-        <button class="info-btn" data-action="quick-info" data-product="matchaLatte">i</button>
-          Matcha Latte
+      <div class="product-cell">
+        <button class="info-btn" data-action="quick-info" data-product="matchaLatte" aria-label="Show matcha latte recipe" title="Recipe info">i</button>
+          <span class="product-title">Matcha Latte</span>
       </div>
-        <div>$${SERVE_PRICE} / per serving</div>
+        <div class="serve-price">$${SERVE_PRICE} <span>/ serving</span></div>
 
     <div class="qty">
-      <button data-action="recipe-dec" data-product="matchaLatte">-</button>
-      <span>${matchaLatteQty}</span>
-      <button data-action="recipe-inc" data-product="matchaLatte">+</button>
+      <button data-action="recipe-dec" data-product="matchaLatte" aria-label="Decrease matcha latte batch quantity">-</button>
+      <span class="qty-value">${matchaLatteQty}</span>
+      <button data-action="recipe-inc" data-product="matchaLatte" aria-label="Increase matcha latte batch quantity">+</button>
       ${matchaTotalCost > 0 ? `<span class="qty-cost">-$${matchaTotalCost}</span>` : ""}
     </div>
 
@@ -896,13 +1170,13 @@ function renderRecipesContent() {
   `;
               })
               .join("")
-          : "Idle"
+          : '<span class="idle-state">Idle</span>'
       }
     </div>
 
     <div class="stock-cell">
-      <div>
-        ${matchaLatteStock.length === 0 ? "Item 86" : matchaLatteStock.length}
+      <div class="stock-text ${matchaMeta.statusClass ? `status ${matchaMeta.statusClass}` : ""}">
+        ${matchaLatteStock.length === 0 ? "Sold out" : `${matchaLatteStock.length} ready`}
       </div>
       <div class="stock-blocks">
         ${state.products.matchaLatte.stock
@@ -927,10 +1201,10 @@ function renderKitchenPanel() {
   const fridgeCost = getUpgradeCost(200, f.level);
 
   return `
-  <div>
-    <strong>☕ Coffee Machine</strong>
+  <div class="equipment-list">
+    <strong class="summary-title">Coffee Machine</strong>
 
-    <div>⚡ Speed: x${m.speedMultiplier.toFixed(1)}</div>
+    <div class="summary-line">Speed: <strong>x${m.speedMultiplier.toFixed(1)}</strong></div>
     <button 
       data-action="upgrade-speed"
       ${state.cash >= speedCost ? "" : "disabled"}
@@ -938,8 +1212,8 @@ function renderKitchenPanel() {
       Upgrade Speed ($${speedCost})
     </button>
 
-    <div style="margin-top:8px;">
-      📦 Capacity: ${m.capacity} batches
+    <div class="summary-line summary-gap">
+      Capacity: <strong>${m.capacity} batches</strong>
     </div>
     <button 
       data-action="upgrade-capacity"
@@ -948,11 +1222,11 @@ function renderKitchenPanel() {
       Upgrade Capacity ($${capacityCost})
     </button>
 
-    <hr style="margin:12px 0;">
+    <hr class="summary-gap-lg">
 
-    <strong>🧊 Fridge</strong>
+    <strong class="summary-title">Fridge</strong>
 
-    <div>❄️ Freshness: x${f.freshnessMultiplier.toFixed(1)}</div>
+    <div class="summary-line">Freshness: <strong>x${f.freshnessMultiplier.toFixed(1)}</strong></div>
     <button 
       data-action="upgrade-fridge"
       ${state.cash >= fridgeCost ? "" : "disabled"}
@@ -971,7 +1245,7 @@ function renderCustomerPanel() {
   if (!customers.length) {
     return `
       <div class="customer-panel customer-panel-empty">
-        <div>No customers at the moment...</div>
+        <div class="customer-line">No customers at the moment</div>
         <div class="customer-subtext">Waiting for next order</div>
       </div>
     `;
@@ -993,7 +1267,7 @@ function renderCustomerPanel() {
 
       return `
       <div class="customer-panel">
-        ${customer.name}: ${
+        <div class="customer-line"><span class="customer-name">${customer.name}</span>: ${
           customer.phase === "bad"
             ? "This tastes off..."
             : customer.phase === "neutral"
@@ -1003,7 +1277,7 @@ function renderCustomerPanel() {
                 : customer.phase === "expired"
                   ? customer.angry
                   : customer.dialogue
-        }
+        }</div>
 
         ${
           customer.phase === "ordering"
@@ -1043,9 +1317,14 @@ function renderCustomerPanel() {
 // render main menu
 function renderMenu() {
   mainBodyEl.innerHTML = `
-      <div style="text-align:center; padding:40px;">
-        <h2>Main Menu</h2>
-        <button data-action="start-game">Play Game</button>
+      <div class="menu-screen">
+        <div>
+        <h2>Your Shop</h2>
+        <div class="menu-actions">
+          <button data-action="start-game">Play Game</button>
+          <button class="btn-green" data-action="start-tutorial">Tutorial</button>
+        </div>
+        </div>
       </div>
     `;
 
@@ -1065,10 +1344,12 @@ function renderSettingsOverlay() {
       <div class="settings-panel">
         <h3>Settings</h3>
 
+        <div class="settings-actions">
         <button data-action="restart-game">Restart</button>
         <button data-action="exit-game">Exit to Menu</button>
         <button data-action="close-settings">Close</button>
-        <label>
+        </div>
+        <label class="toggle-row">
           Builder Mode
         <input type="checkbox" data-action="toggle-builder" ${state.builder.enabled ? "checked" : ""}/>
         </label>
@@ -1085,6 +1366,8 @@ function render() {
     return;
   }
 
+  runTutorialStepEffects();
+
   // game mode
 
   const totalFinishedStock =
@@ -1097,27 +1380,27 @@ function render() {
     state.ui.activeTab === "recipes" ? "tab active" : "tab";
 
   mainBodyEl.innerHTML = `
-    <div class="top-bar">
-      <button data-action="open-settings" class="btn-exit">Settings</button>
-      <button data-action="view-cash">Cash: $${state.cash}</button>
+    <div class="top-bar${getTutorialTargetClass("status")}">
+      <button data-action="open-settings" class="btn-exit stat-settings">Settings</button>
+      <button data-action="view-cash" class="stat-button">Cash: <strong>$${state.cash}</strong></button>
 
-    <button data-action="view-servings">
+    <button data-action="view-servings" class="stat-button">
       Ready Servings: <span class="profit-value">${totalFinishedStock}</span>
     </button>
 
-    <button data-action="view-expenses">
-      Expenses: $${state.expenses.ingredients + state.expenses.waste}
+    <button data-action="view-expenses" class="stat-button">
+      Expenses: <strong>$${state.expenses.ingredients + state.expenses.waste}</strong>
     </button>
 
-    <button data-action="view-reputation">
-      ⭐ Reputation ${state.reputation.score} (${state.reputation.level})
+    <button data-action="view-reputation" class="stat-button">
+      Reputation <strong>${state.reputation.score}</strong> (${state.reputation.level})
     </button>
 
     </div>
 
     <div class="tabs">
       <button class="${inventoryTabClass}" data-action="tab" data-tab="inventory">Inventory</button>
-      <button class="${recipesTabClass}" data-action="tab" data-tab="recipes">Recipes</button>
+      <button class="${recipesTabClass}${getTutorialTargetClass("recipes-tab")}" data-action="tab" data-tab="recipes">Recipes</button>
     </div>
 
     <div> 
@@ -1158,7 +1441,7 @@ function render() {
     const profit = totalRevenue - totalExpenses;
 
     infoContent = `
-    <div class="summary-line"><strong>💰 Profit Summary</strong></div>
+    <div class="summary-line"><strong class="summary-title">Profit Summary</strong></div>
 
     <div class="summary-line">Coffee: ${coffeeServed} served → $${coffeeRevenue}</div>
     <div class="summary-line">Matcha Latte: ${matchaServed} served → $${matchaRevenue}</div>
@@ -1171,7 +1454,7 @@ function render() {
 
   if (view === "servings") {
     infoContent = `
-    <div class="summary-line"><strong>☕ Coffee</strong></div>
+    <div class="summary-line"><strong class="summary-title">Coffee</strong></div>
     <div class="summary-line">Stock: ${state.products.coffee.stock.length}</div>
     <div class="summary-line">Production Time: 8s</div>
     <div class="summary-line">Ingredients: Milk + Beans</div>
@@ -1181,7 +1464,7 @@ function render() {
       Production Time: ${(COFFEE_PRODUCTION_TIME_MS / state.kitchen.machine.speedMultiplier / 1000).toFixed(1)}s
     </div>
 
-    <div class="summary-line summary-gap-lg"><strong>🍵 Matcha Latte</strong></div>
+    <div class="summary-line summary-gap-lg"><strong class="summary-title">Matcha Latte</strong></div>
     <div class="summary-line">Stock: ${state.products.matchaLatte.stock.length}</div>
     <div class="summary-line">Production Time: 15s</div>
     <div class="summary-line">Ingredients: Milk + Matcha</div>
@@ -1197,7 +1480,7 @@ function render() {
     const totalExpenses = state.expenses.ingredients + state.expenses.waste;
 
     infoContent = `
-    <div class="summary-line"><strong>💸 Cost Breakdown</strong></div>
+    <div class="summary-line"><strong class="summary-title">Cost Breakdown</strong></div>
 
     <div class="summary-line">Ingredients Cost: $${state.expenses.ingredients}</div>
     <div class="summary-line">Waste Cost: $${state.expenses.waste}</div>
@@ -1211,7 +1494,7 @@ function render() {
     const r = state.reputation;
 
     infoContent = `
-    <div class="summary-line"><strong>⭐ Reputation</strong></div>
+    <div class="summary-line"><strong class="summary-title">Reputation</strong></div>
 
     <div class="summary-line">Score: ${r.score}</div>
     <div class="summary-line">Level: ${r.level}</div>
@@ -1240,6 +1523,9 @@ function render() {
   if (state.ui.paused) {
     mainBodyEl.innerHTML += renderSettingsOverlay();
   }
+
+  syncTutorialTargetClasses();
+  mainBodyEl.innerHTML += renderTutorialOverlay();
 }
 
 // =========================================================
@@ -1337,6 +1623,7 @@ function serveProduct(productType, id) {
 // spawn customer
 function spawnCustomer() {
   if (state.ui.mode !== "game" || state.ui.paused) return;
+  if (state.ui.tutorial.active) return;
   if (state.customer.list.length >= 5) return;
 
   const base = getRandomCustomer();
@@ -1419,6 +1706,34 @@ function handleMainClick(event) {
   const action = target.dataset.action;
   const product = target.dataset.product;
 
+  if (action === "start-tutorial") {
+    startTutorial();
+    return;
+  }
+
+  if (action === "tutorial-next") {
+    if (!state.ui.tutorial.active || !isTutorialStepComplete()) return;
+
+    if (state.ui.tutorial.stepIndex >= TUTORIAL_STEPS.length - 1) {
+      finishTutorial();
+      return;
+    }
+
+    setTutorialStep(state.ui.tutorial.stepIndex + 1);
+    return;
+  }
+
+  if (action === "tutorial-back") {
+    if (!state.ui.tutorial.active) return;
+    setTutorialStep(state.ui.tutorial.stepIndex - 1);
+    return;
+  }
+
+  if (action === "tutorial-skip") {
+    finishTutorial({ skipped: true });
+    return;
+  }
+
   // toggle builder panel (dev tool)
   if (action === "toggle-builder") {
     state.builder.enabled = !state.builder.enabled;
@@ -1462,6 +1777,7 @@ function handleMainClick(event) {
 
   // start game from menu
   if (action === "start-game") {
+    resetTutorialState();
     state.ui.mode = "game";
 
     // show panels again
@@ -1498,6 +1814,7 @@ function handleMainClick(event) {
   if (action === "exit-game") {
     state.ui.mode = "menu";
     state.ui.paused = false;
+    resetTutorialState();
     resetUIForMenu();
     render();
     return;
@@ -1601,6 +1918,7 @@ function handleMainClick(event) {
     const product = target.dataset.product;
     const id = target.dataset.id;
     serveProduct(product, id);
+    advanceTutorialIfComplete();
     return;
   }
 
@@ -1633,6 +1951,7 @@ function handleMainClick(event) {
   if (action === "tab") {
     state.ui.activeTab = target.dataset.tab;
     render();
+    advanceTutorialIfComplete();
     return;
   }
 
@@ -1683,6 +2002,7 @@ function handleMainClick(event) {
 
     state.recipes[product].qty++;
     render();
+    advanceTutorialIfComplete();
     return;
   }
 
@@ -1787,6 +2107,7 @@ function handleMainClick(event) {
     });
 
     render();
+    advanceTutorialIfComplete();
   }
 }
 
@@ -1849,7 +2170,7 @@ function init() {
   // customer loop defined INSIDE
   function startCustomerLoop() {
     setTimeout(() => {
-      if (state.customer.list.length < 5) {
+      if (!state.ui.tutorial.active && state.customer.list.length < 5) {
         spawnCustomer();
       }
       startCustomerLoop();
@@ -1894,6 +2215,9 @@ function init() {
     if (state.ui.mode !== "game" || state.ui.paused) return;
 
     processProductionQueue();
+    if (state.ui.tutorial.active && getTutorialStep().id === "production") {
+      advanceTutorialIfComplete();
+    }
     render(); // THIS FIXES LAG
   }, 500);
 }
